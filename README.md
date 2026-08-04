@@ -15,6 +15,14 @@ The default inputs are `README.md`, `CHANGELOG.md`, optional `site/README.md`,
 optional `site/theme.css`, and optional `site/public/`. The build writes
 `site/dist/` with `/` and `/changelog/`.
 
+## Custom adapter
+
+Existing frontend sites can export `defineLandingPage(...)` from
+`site/landing.config.ts`. Each route declares its entry module and static
+metadata. In addition to the required title and description, route metadata
+can carry canonical, Open Graph, X/Twitter, icon, theme-colour and `<noscript>`
+values; the adapter emits only the optional fields declared by that route.
+
 ## Development
 
 ```powershell
