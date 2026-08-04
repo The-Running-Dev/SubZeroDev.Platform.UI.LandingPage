@@ -1,9 +1,39 @@
+/** Static Open Graph fields emitted for a custom-adapter route. */
+export type LandingPageOpenGraphMetadata = {
+  title: string;
+  description: string;
+  type: string;
+  url: string;
+  imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+};
+
+/** Static X/Twitter card fields emitted for a custom-adapter route. */
+export type LandingPageTwitterMetadata = {
+  card: string;
+  imageUrl?: string;
+};
+
+/** A route-specific favicon or touch-icon link. */
+export type LandingPageIcon = {
+  rel: "icon" | "apple-touch-icon";
+  href: string;
+  type?: string;
+  sizes?: string;
+};
+
 export type LandingPageMetadata = {
   title: string;
   description: string;
   canonicalUrl?: string;
   repositoryUrl?: string;
   socialImageUrl?: string;
+  openGraph?: LandingPageOpenGraphMetadata;
+  twitter?: LandingPageTwitterMetadata;
+  icons?: readonly LandingPageIcon[];
+  themeColor?: string;
+  noScript?: string;
 };
 
 export type LandingPageRoute = {
