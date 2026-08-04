@@ -32,12 +32,12 @@ jobs:
         with:
           name: ${{ inputs.docs-artifact }}
           path: artifacts/docs
-      - uses: The-Running-Dev/SubZeroDev.Platform.UI.LandingPage@v0.1.0
+      - uses: The-Running-Dev/SubZeroDev.Platform.UI.LandingPage@d2625b7be51585371d9f0b6c0b435c25e6ea4ade
         with:
           command: build
           package-version: ${{ inputs.package-version }}
       - if: inputs.docs-artifact != ''
-        uses: The-Running-Dev/SubZeroDev.Platform.UI.LandingPage@v0.1.0
+        uses: The-Running-Dev/SubZeroDev.Platform.UI.LandingPage@d2625b7be51585371d9f0b6c0b435c25e6ea4ade
         with:
           command: merge
           docs-output: artifacts/docs

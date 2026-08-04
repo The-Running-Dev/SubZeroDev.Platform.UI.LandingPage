@@ -14,9 +14,10 @@ Reversibility: moderate.
 ### 2026-08-04 — UI1 release is pinned at 0.1.0
 
 Context: UI2 must consume an immutable prerelease rather than the toolkit
-working tree.
+working tree; Git tags are labels, not an immutability boundary.
 Chosen: publish `subzerodev-platform-ui-landing-page@0.1.0` from source commit
-`d2625b7be51585371d9f0b6c0b435c25e6ea4ade` and tag that commit `v0.1.0`.
+`d2625b7be51585371d9f0b6c0b435c25e6ea4ade`, use that SHA for action references,
+and provide `v0.1.0` as a convenience tag.
 Rejected: a floating npm range or action branch — either can change under a
 consumer without review; a Git submodule — preserves duplicated integration
 ownership.
