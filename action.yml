@@ -1,0 +1,22 @@
+name: SubZeroDev Platform UI Landing Page
+description: Build, check, and optionally merge a SubZeroDev landing page.
+inputs:
+  command:
+    description: build, check, or merge
+    required: false
+    default: check
+  docs-output:
+    description: Documentation build output used by merge
+    required: false
+  package-version:
+    description: Exact npm package version
+    required: false
+    default: 0.1.0
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 22
+    - shell: bash
+      run: npx --yes subzerodev-platform-ui-landing-page@${{ inputs.package-version }} ${{ inputs.command }} ${{ inputs.docs-output && format('--docs-output {0}', inputs.docs-output) || '' }}

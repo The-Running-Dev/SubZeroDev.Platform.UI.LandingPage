@@ -1,0 +1,50 @@
+name: Deploy landing site to GitHub Pages
+
+on:
+  workflow_call:
+    inputs:
+      docs-artifact:
+        required: false
+        type: string
+      package-version:
+        required: true
+        type: string
+    outputs:
+      page_url:
+        value: ${{ jobs.deploy.outputs.page_url }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - if: inputs.docs-artifact != ''
+        uses: actions/download-artifact@v6
+        with:
+          name: ${{ inputs.docs-artifact }}
+          path: artifacts/docs
+      - uses: The-Running-Dev/SubZeroDev.Platform.UI.LandingPage@v0.1.0
+        with:
+          command: build
+          package-version: ${{ inputs.package-version }}
+      - if: inputs.docs-artifact != ''
+        uses: The-Running-Dev/SubZeroDev.Platform.UI.LandingPage@v0.1.0
+        with:
+          command: merge
+          docs-output: artifacts/docs
+          package-version: ${{ inputs.package-version }}
+      - id: artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ inputs.docs-artifact != '' && 'artifacts/docs' || 'site/dist' }}
+      - id: deployment
+        uses: actions/deploy-pages@v5
