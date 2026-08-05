@@ -27,7 +27,7 @@ package version exactly.
 
 ## UI3 — Caller-supplied route body
 
-**Status:** implemented; release pending
+**Status:** complete
 
 Delivers a second custom-adapter route form. A body route supplies the document
 body itself instead of receiving the fixed `<div id="root"></div>` and entry
@@ -37,6 +37,6 @@ head because `<style>` is not conforming inside `<body>`. Entry routes keep
 their existing shell and their existing type, so this is additive: a `0.2.0`
 consumer's configuration builds unchanged.
 
-Handoff is not complete until the release is published: this needs a new
-immutable `0.x` version (`0.3.0`) on npm, which requires explicit authorization
-per the agent contract. `SubZeroDev.com` pins that version once it exists.
+Published handoff: npm `subzerodev-platform-ui-landing-page@0.3.0` from
+source commit `ab44435e3bc1af90509dd0364856a84aa7d932e8`; consumers pin the
+package version exactly.
