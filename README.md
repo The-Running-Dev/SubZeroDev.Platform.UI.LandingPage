@@ -7,7 +7,7 @@ Pages deployment path.
 ## Quick start
 
 ```powershell
-npm install --save-dev subzerodev-platform-ui-landing-page@0.1.0
+npm install --save-dev subzerodev-platform-ui-landing-page@0.3.0
 subzerodev-platform-ui-landing-page build
 ```
 
