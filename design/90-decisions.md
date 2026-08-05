@@ -1,5 +1,28 @@
 # Decisions
 
+### 2026-08-05 — A route declares either an entry module or its own document body
+
+Context: `0.2.0` composes one body for every custom-adapter route: `<div id="root"></div>` plus a module
+script for the route's entry. A consumer whose page is fully composed at build time cannot use the
+adapter at all — it would have to ship an empty document plus a bundle whose only job is to fill it,
+and it has no valid place for its stylesheet, because `<style>` is not conforming in `<body>`.
+Chosen: make `LandingPageRoute` a union of an entry route and a body route. A body route's markup is
+emitted verbatim as the document body, no script element is emitted, and an optional `stylesheet` is
+emitted as a `<style>` element at the end of the head. Exactly one form must be declared; the
+constraint is a type-level fact and is validated again at build time for JavaScript callers. Entry
+routes are untouched, so this is additive for existing consumers.
+Rejected: **An optional `body` beside the required `entry`** — the two never apply together, so the
+type would admit "both" and "neither" and defer every mistake to a build-time error. **Escaping the
+supplied body** — escaping is what makes the typed static head safe, and it is exactly what makes a
+supplied body useless; the difference from the raw-head escape hatch rejected on 2026-08-04 is that
+the head carries package-owned semantics a raw hole could contradict, whereas the body is entirely
+consumer-owned content. **A body route that bypasses Vite** — a second output path would let asset
+handling, public-directory copying and output layout drift between route forms. **A `stylesheet` on
+entry routes too** — an entry route's CSS already travels through its module graph, and a second
+mechanism would compete with it.
+Reversibility: moderate. The union is easy to extend with further route forms; withdrawing the body
+form after a consumer adopts it needs a new breaking package release.
+
 ### 2026-08-04 — The custom adapter owns declared static head, not consumer entry HTML
 
 Context: `0.1.0` generated custom-adapter entry HTML but could express only a title, description,

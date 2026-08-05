@@ -24,3 +24,19 @@ as a new immutable `0.x` package version; consumers continue to pin exactly.
 Published handoff: npm `subzerodev-platform-ui-landing-page@0.2.0` from
 source commit `69ec6db0de0dce467e5414cfb8ed670f51b117d1`; consumers pin the
 package version exactly.
+
+## UI3 — Caller-supplied route body
+
+**Status:** implemented; release pending
+
+Delivers a second custom-adapter route form. A body route supplies the document
+body itself instead of receiving the fixed `<div id="root"></div>` and entry
+script, and the emitted document then loads no script at all. Such a route may
+also declare a stylesheet, which the adapter emits as a `<style>` element in the
+head because `<style>` is not conforming inside `<body>`. Entry routes keep
+their existing shell and their existing type, so this is additive: a `0.2.0`
+consumer's configuration builds unchanged.
+
+Handoff is not complete until the release is published: this needs a new
+immutable `0.x` version (`0.3.0`) on npm, which requires explicit authorization
+per the agent contract. `SubZeroDev.com` pins that version once it exists.

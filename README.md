@@ -18,10 +18,31 @@ optional `site/theme.css`, and optional `site/public/`. The build writes
 ## Custom adapter
 
 Existing frontend sites can export `defineLandingPage(...)` from
-`site/landing.config.ts`. Each route declares its entry module and static
-metadata. In addition to the required title and description, route metadata
-can carry canonical, Open Graph, X/Twitter, icon, theme-colour and `<noscript>`
-values; the adapter emits only the optional fields declared by that route.
+`site/landing.config.ts`. Each route declares static metadata and exactly one of
+`entry` and `body`. In addition to the required title and description, route
+metadata can carry canonical, Open Graph, X/Twitter, icon, theme-colour and
+`<noscript>` values; the adapter emits only the optional fields declared by that
+route.
+
+An `entry` route names a module, and its document is the toolkit shell —
+`<div id="root"></div>` plus a module script — with `hydrate` available for a
+server-rendered mount. A `body` route supplies the document body itself; that
+markup is emitted verbatim, no script is emitted, and the built page loads
+nothing. A `body` route may also declare a `stylesheet`, which is emitted as a
+`<style>` element in the head, since `<style>` is not valid in the body.
+
+```ts
+export default defineLandingPage({
+  routes: [
+    {
+      path: "/",
+      body: "<main><h1>Composed at build time</h1></main>",
+      stylesheet: "main { font: 1rem/1.5 system-ui; }",
+      metadata: { title: "Home", description: "A page that loads no script." },
+    },
+  ],
+});
+```
 
 ## Development
 

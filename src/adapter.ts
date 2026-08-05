@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { build as viteBuild, createServer } from "vite";
 import { tsImport } from "tsx/esm/api";
 import type { LandingPageConfig } from "./index.js";
+import { assertRoute, isBodyRoute } from "./route.js";
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -26,7 +27,9 @@ async function loadAdapter(path: string): Promise<LandingPageConfig> {
     throw new Error(
       `Adapter '${path}' must have a default export from defineLandingPage().`,
     );
-  return candidate as LandingPageConfig;
+  const config = candidate as LandingPageConfig;
+  for (const route of config.routes) assertRoute(route);
+  return config;
 }
 
 function outputEntry(path: string): string {
@@ -54,7 +57,6 @@ function html(
   route: LandingPageConfig["routes"][number],
   root: string,
 ): string {
-  const entry = `/${relative(root, resolve(root, route.entry)).replaceAll("\\", "/")}`;
   const { metadata } = route;
   const canonical = metadata.canonicalUrl
     ? `<link rel="canonical" href="${escapeHtml(metadata.canonicalUrl)}">`
@@ -99,7 +101,14 @@ function html(
   const noScript = metadata.noScript
     ? `<noscript>${escapeHtml(metadata.noScript)}</noscript>`
     : "";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(metadata.title)}</title><meta name="description" content="${escapeHtml(metadata.description)}">${canonical}${image}${openGraph}${twitter}${themeColor}${icons}</head><body><div id="root"></div>${noScript}<script type="module" src="${entry}"></script></body></html>`;
+  const stylesheet =
+    isBodyRoute(route) && route.stylesheet !== undefined
+      ? `<style>${route.stylesheet}</style>`
+      : "";
+  const body = isBodyRoute(route)
+    ? `${route.body}${noScript}`
+    : `<div id="root"></div>${noScript}<script type="module" src="/${relative(root, resolve(root, route.entry)).replaceAll("\\", "/")}"></script>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(metadata.title)}</title><meta name="description" content="${escapeHtml(metadata.description)}">${canonical}${image}${openGraph}${twitter}${themeColor}${icons}${stylesheet}</head><body>${body}</body></html>`;
 }
 
 export async function hasAdapter(

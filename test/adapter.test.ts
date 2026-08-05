@@ -73,4 +73,125 @@ describe("custom adapter", () => {
     expect(home).not.toContain("theme-color");
     expect(home).not.toContain("<noscript>");
   });
+
+  it("emits a caller-supplied body with no script beside an entry route", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { routes: [ { path: "/", body: "<main id=\\"supplied\\"><h1>Composed</h1></main>", stylesheet: "#supplied { color: rebeccapurple; }", metadata: { title: "Composed", description: "Composed page", themeColor: "#000000" } }, { path: "/app/", entry: "src/main.ts", metadata: { title: "App", description: "App page" } } ] };`,
+      "utf8",
+    );
+    await writeFile(
+      join(site, "src", "main.ts"),
+      "document.querySelector('#root')!.textContent = 'app';",
+      "utf8",
+    );
+    const outDir = join(site, "dist");
+    await buildAdapter(root, "site/landing.config.ts", outDir);
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).toContain('<main id="supplied"><h1>Composed</h1></main>');
+    expect(home).toContain(
+      "<style>#supplied { color: rebeccapurple; }</style>",
+    );
+    expect(home).toContain('name="theme-color" content="#000000"');
+    expect(home).not.toContain('<div id="root">');
+    expect(home).not.toContain("<script");
+    expect(home).not.toContain('<link rel="stylesheet"');
+    const app = await readFile(join(outDir, "app", "index.html"), "utf8");
+    expect(app).toContain('<div id="root">');
+    expect(app).toContain("<script");
+  });
+
+  it("builds a site whose routes are all bodies, with its public assets", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "public"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { routes: [ { path: "/", body: "<main>Home</main>", metadata: { title: "Home", description: "Home page" } }, { path: "/legal/", body: "<main>Legal</main>", metadata: { title: "Legal", description: "Legal page" } } ] };`,
+      "utf8",
+    );
+    await writeFile(
+      join(site, "public", "robots.txt"),
+      "User-agent: *\n",
+      "utf8",
+    );
+    const outDir = join(site, "dist");
+    await buildAdapter(root, "site/landing.config.ts", outDir);
+    expect(await readFile(join(outDir, "index.html"), "utf8")).toContain(
+      "<main>Home</main>",
+    );
+    expect(
+      await readFile(join(outDir, "legal", "index.html"), "utf8"),
+    ).toContain("<main>Legal</main>");
+    expect(await readFile(join(outDir, "robots.txt"), "utf8")).toContain(
+      "User-agent",
+    );
+  });
+
+  it("rejects a route that declares both an entry and a body", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { routes: [{ path: "/", entry: "src/main.ts", body: "<p>both</p>", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await writeFile(join(site, "src", "main.ts"), "export {};", "utf8");
+    await expect(
+      buildAdapter(root, "site/landing.config.ts", join(site, "dist")),
+    ).rejects.toThrow("exactly one of 'entry' and 'body'");
+  });
+
+  it("rejects a route that declares neither an entry nor a body", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(site, { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { routes: [{ path: "/", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await expect(
+      buildAdapter(root, "site/landing.config.ts", join(site, "dist")),
+    ).rejects.toThrow("exactly one of 'entry' and 'body'");
+  });
+
+  it("rejects a stylesheet that would close the style element", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(site, { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { routes: [{ path: "/", body: "<p>page</p>", stylesheet: "a {}</style><script>alert(1)</script>", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await expect(
+      buildAdapter(root, "site/landing.config.ts", join(site, "dist")),
+    ).rejects.toThrow("containing '</style'");
+  });
+
+  it("rejects a stylesheet declared on an entry route", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { routes: [{ path: "/", entry: "src/main.ts", stylesheet: "a {}", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await writeFile(join(site, "src", "main.ts"), "export {};", "utf8");
+    await expect(
+      buildAdapter(root, "site/landing.config.ts", join(site, "dist")),
+    ).rejects.toThrow("belongs to a body route");
+  });
 });
