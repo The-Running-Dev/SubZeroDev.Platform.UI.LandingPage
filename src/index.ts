@@ -1,3 +1,5 @@
+import { assertRoute } from "./route.js";
+
 /** Static Open Graph fields emitted for a custom-adapter route. */
 export type LandingPageOpenGraphMetadata = {
   title: string;
@@ -36,12 +38,23 @@ export type LandingPageMetadata = {
   noScript?: string;
 };
 
-export type LandingPageRoute = {
+/** A route whose document body is the toolkit shell filled by an entry module. */
+export type LandingPageEntryRoute = {
   path: "/" | `/${string}/`;
   entry: string;
   metadata: LandingPageMetadata;
   hydrate?: boolean;
 };
+
+/** A route whose document body is supplied by the caller and loads no script. */
+export type LandingPageBodyRoute = {
+  path: "/" | `/${string}/`;
+  body: string;
+  stylesheet?: string;
+  metadata: LandingPageMetadata;
+};
+
+export type LandingPageRoute = LandingPageEntryRoute | LandingPageBodyRoute;
 
 export type LandingPageConfig = {
   routes: readonly LandingPageRoute[];
@@ -57,5 +70,6 @@ export function defineLandingPage(
   if (config.routes.length === 0) {
     throw new Error("LandingPageConfig must declare at least one route.");
   }
+  for (const route of config.routes) assertRoute(route);
   return config;
 }
