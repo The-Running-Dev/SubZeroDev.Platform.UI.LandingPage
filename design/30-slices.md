@@ -13,10 +13,14 @@ tag. Consumers pin the action by that commit SHA.
 
 ## UI2 — Custom-adapter static-head contract
 
-**Status:** in progress
+**Status:** complete
 
 Delivers the typed static-head metadata that an existing custom site needs to
 retain its canonical URL, social metadata, icons, theme colour and no-script
 fallback when it adopts the reusable adapter. The package emits only declared
 optional elements and escapes every supplied value. The correction is released
 as a new immutable `0.x` package version; consumers continue to pin exactly.
+
+Published handoff: npm `subzerodev-platform-ui-landing-page@0.2.0` from
+source commit `69ec6db0de0dce467e5414cfb8ed670f51b117d1`; consumers pin the
+package version exactly.
