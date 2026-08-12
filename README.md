@@ -30,6 +30,9 @@ declare `dataSourceIds`; their filtered public map is emitted as inert JSON in
 `#szd-json-sources` for consumer code to parse and load. Generic and body
 routes remain static and make no runtime data request.
 
+See [JSON-backed site data](docs/json-site-data.md) for a complete generic-site
+example, an entry-route runtime-data example, and the validation rules.
+
 ## Custom adapter
 
 Existing frontend sites can export `defineLandingPage(...)` from
