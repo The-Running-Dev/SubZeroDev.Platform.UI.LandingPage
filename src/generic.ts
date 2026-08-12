@@ -166,9 +166,11 @@ function documentHtml(
   const canonical = options.canonicalUrl
     ? `<link rel="canonical" href="${escapeHtml(options.canonicalUrl)}${active === "changelog" ? "changelog/" : ""}">`
     : "";
-  const docs = options.docsUrl ? `<a href="${options.docsUrl}">Docs</a>` : "";
+  const docs = options.docsUrl
+    ? `<a href="${escapeHtml(options.docsUrl)}">Docs</a>`
+    : "";
   const repository = options.repositoryUrl
-    ? `<a href="${options.repositoryUrl}" rel="noreferrer">Repository</a>`
+    ? `<a href="${escapeHtml(options.repositoryUrl)}" rel="noreferrer">Repository</a>`
     : "";
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

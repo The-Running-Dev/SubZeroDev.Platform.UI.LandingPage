@@ -171,6 +171,12 @@ export async function buildAdapterConfig(
     for (const route of config.routes) {
       const output = outputEntry(route.path);
       const entryFile = join(temporary, output);
+      // `assertRoutePath` already rejects every traversal form; this refuses to
+      // write at all if a later path form ever escapes the generated directory.
+      if (relative(temporary, entryFile).startsWith(".."))
+        throw new Error(
+          `Route '${route.path}' would write outside the generated entry directory.`,
+        );
       await mkdir(dirname(entryFile), { recursive: true });
       await writeFile(
         entryFile,

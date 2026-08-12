@@ -45,6 +45,48 @@ Run `subzerodev-platform-ui-landing-page build`. The builder renders the
 Markdown with the same sanitization used by the legacy README mode, copies
 `site/public`, and writes `site/dist`.
 
+## The same model from a file or from a URL
+
+The builder never branches on where a source lives. Replacing `path:` with
+`url:` for the same id builds the identical site from a published artifact:
+
+```yaml
+# site/sources.public.yml
+version: 1
+sources:
+  landing-page:
+    at: build
+    url: https://the-running-dev.github.io/Data/landing/landing.json
+    cache: manual
+    maxBytes: 2000000
+```
+
+That is the property the Data repository is built around: content is authored as
+YAML, converted to JSON artifacts with `data-json-yaml`, and published. A
+consumer then reads a bundled file during development and the published URL in
+CI by changing one line of the source map, with no code change and no second
+loader. `test/json-source.test.ts` asserts the two forms produce byte-identical
+output.
+
+Unlike a runtime documentation site, a landing build never falls back to bundled
+data when a declared URL fails: the build fails and the previous deployment
+stands. Prefer that to publishing a site whose content silently reverted.
+
+A model fetched over HTTP is trusted to the same degree as the code that
+composes the page. For `kind: "generic"` the Markdown is sanitized, so a
+compromised source can change copy but cannot introduce script. For
+`kind: "adapter"` a route's `body` and `stylesheet` are emitted verbatim, so a
+source you do not control can put arbitrary markup on the page.
+
+The builder does not verify a published artifact for you, and it is the wrong
+layer to: integrity belongs to whatever publishes the JSON.
+`SubZeroDev.Adventures.Content` is the worked example — it publishes a
+`manifest.json` naming every document with its `version` and a `sha-256:`
+digest, validates each one against a JSON-Schema contract before deploying, and
+fails the build if the exported JSON has drifted from its source. A landing site
+reading such a feed checks the manifest itself, in its own build. Where no such
+manifest exists, prefer `path:` for any model carrying markup.
+
 Every Markdown property is `{ "markdown": string, "assetBase"?: string }`.
 `assetBase` is repository-relative and defaults to the repository root. Use it
 when local Markdown links or images should resolve from another directory.

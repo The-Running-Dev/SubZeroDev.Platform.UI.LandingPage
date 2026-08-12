@@ -1,4 +1,4 @@
-import { assertRoute } from "./route.js";
+import { assertRoute, assertUniquePaths } from "./route.js";
 
 /** Static Open Graph fields emitted for a custom-adapter route. */
 export type LandingPageOpenGraphMetadata = {
@@ -81,5 +81,6 @@ export function defineLandingPage(
     throw new Error("LandingPageConfig must declare at least one route.");
   }
   for (const route of config.routes) assertRoute(route);
+  assertUniquePaths(config.routes);
   return config;
 }

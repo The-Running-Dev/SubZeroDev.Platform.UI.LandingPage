@@ -7,6 +7,24 @@ The public executable is `subzerodev-platform-ui-landing-page`. It exports
 `LandingPageIcon`. Generic selectors start `szd-`; generic tokens start
 `--szd-`. CLI input and error behavior is specified in the repository README.
 
+## Route paths
+
+A route path starts and ends with `/`. Every segment between them matches
+`[A-Za-z0-9._-]+` and is neither `.` nor `..`, so no path can name a directory
+above the generated entry directory and no percent-escape survives to decode
+into a separator. Two routes may not declare one path. Both constraints hold
+identically for `defineLandingPage` and for a `LandingPageData` model; the
+adapter additionally refuses to write any entry document that would resolve
+outside the generated entry directory.
+
+## Escaping
+
+Every value the package interpolates into a document it owns is HTML-escaped.
+That covers the custom-adapter static head and the generic shell's title,
+description, canonical URL, documentation URL and repository URL. The two
+values emitted verbatim are named and validated elsewhere: a body route's
+`body` and its `stylesheet`. Generic Markdown is sanitized, not escaped.
+
 ## JSON-backed site data
 
 UI4 adds `LandingPageData` as a strict, versioned union and exports its public

@@ -43,7 +43,7 @@ package version exactly.
 
 ## UI4 — JSON-backed landing data
 
-**Status:** implementation complete; release pending
+**Status:** implementation complete; validator tests partial; release pending
 
 Delivers a versioned JSON site model through `subzerodev-data-json`, preferred
 when a public source map exists and falling back to the current TypeScript
@@ -60,3 +60,10 @@ release exporting `readSourceMap` from `subzerodev-data-json/node`.
 build-time HTTP, and mixed build/runtime auxiliary sources; negative tests cover
 every validator; declared JSON failure never falls back; and legacy adapter and
 Markdown builds remain unchanged with no source map.
+
+**Not yet met:** `test/json-source.test.ts` covers the file-and-URL parity, the
+unreachable-URL failure, public headers and a non-build root source, and
+`test/index.test.ts` covers route paths, duplicates and `dataSourceIds` on a
+body route. The remaining `data.ts` rejection branches — version, kind, markdown
+and metadata shape, icon `rel`, Open Graph numeric fields — and `filteredMap`'s
+unknown-id and runtime-file-source errors still have no negative test.

@@ -1,5 +1,53 @@
 # Decisions
 
+### 2026-08-13 — A consumer owns its own content loader; the package owns the site model
+
+Context: Docs-Template resolves many feature-scoped content documents — projects,
+portfolio, CV, navigation, badges — each from a bundled JSON file or a remote URL
+selected by configuration. The Data repository authors those in YAML, converts
+them with `data-json-yaml`, and publishes the JSON artifacts. The question was
+whether the landing package should grow the same per-feature content model so a
+consumer like SubZeroDev.com could declare its projects and testimonials in JSON.
+Chosen: it should not. The package's JSON path already delivers the loader
+property that matters — a root model resolves from `path:` or `url:`
+interchangeably, because `subzerodev-data-json` abstracts the difference and the
+builder never branches on it. A consumer with structured content calls Data.Json
+itself from `site/landing.config.ts`, exactly as Portfolio and Docs-Template do,
+and composes its own body. The package keeps owning the site model, the routes
+and the emitted document; it never owns product copy or its shape.
+Rejected: **a section or component content model in the package** (`kind:
+"sections"` with hero, features, projects, testimonials) — it is the most literal
+reading of Docs-Template parity, and it moves copy structure and visual identity
+into a repository whose brief excludes both. **build-time data injected into
+`defineLandingPage`** — a factory receiving resolved sources would save each
+consumer a little wiring, at the cost of a contract change and of the package
+owning port construction that Data.Json already owns; the adapter module can
+already call the loader directly, so the seam buys nothing it does not have.
+Reversibility: high. Nothing was added, so nothing has to be withdrawn; the
+build-time-injection seam remains available as an additive `0.x` change.
+
+### 2026-08-13 — Route paths are validated as directory names, and every owned value is escaped
+
+Context: the route-path validator accepted `/../`. A model route so declared
+generated `../index.html`, which the adapter wrote outside its temporary entry
+directory and left behind when the build then failed; `20-contract.md` had
+claimed invalid route paths were errors. Separately, the generic shell
+interpolated `docsUrl` and `repositoryUrl` into `href` attributes unescaped
+while escaping the canonical URL beside them, so either value could close its
+attribute and open a script element — in a document whose contract is that it
+loads nothing. UI4 made both reachable from a JSON model that may be fetched
+over HTTP.
+Chosen: validate the path grammar in `assertRoute`, so the TypeScript adapter
+and the JSON model enforce one rule rather than two; reject duplicate paths in
+both; refuse to write an entry document resolving outside the generated
+directory; and escape the two navigation URLs.
+Rejected: **validating only the JSON path** — the adapter writes the file, so
+the check belongs where the write is, and the asymmetry was itself the defect.
+**Escaping a body route's `body` or `stylesheet`** — those are the two values
+the contract names as caller-owned and validates by other means.
+Reversibility: high for the escaping. The path grammar is a narrowing, so a
+consumer using a segment outside `[A-Za-z0-9._-]` would need a widening release.
+
 ### 2026-08-13 — UI4 pins Data.Json 0.2.0
 
 Context: the UI4 dependency gate required an immutable npm release exporting

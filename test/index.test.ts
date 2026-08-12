@@ -67,6 +67,46 @@ describe("defineLandingPage", () => {
       }),
     ).toThrow("belongs to a body route");
   });
+
+  it("accepts nested and dotted route path segments", () => {
+    expect(
+      defineLandingPage({
+        routes: [
+          { path: "/", entry: "src/main.ts", metadata },
+          { path: "/docs/v1.2/", entry: "src/docs.ts", metadata },
+          { path: "/.well-known/", entry: "src/known.ts", metadata },
+        ],
+      }).routes,
+    ).toHaveLength(3);
+  });
+
+  it("rejects a route path that would traverse out of the entry directory", () => {
+    for (const path of ["/../", "/a/../../", "/./", "/a%2f..%2f/", "/a//"])
+      expect(() =>
+        defineLandingPage({
+          routes: [{ path: path as "/", entry: "src/main.ts", metadata }],
+        }),
+      ).toThrow("invalid segment");
+  });
+
+  it("rejects a route path that is not a directory path", () => {
+    expect(() =>
+      defineLandingPage({
+        routes: [{ path: "/about" as "/", entry: "src/main.ts", metadata }],
+      }),
+    ).toThrow("must start and end with '/'");
+  });
+
+  it("rejects two routes that would generate one document", () => {
+    expect(() =>
+      defineLandingPage({
+        routes: [
+          { path: "/legal/", body: "<main>a</main>", metadata },
+          { path: "/legal/", body: "<main>b</main>", metadata },
+        ],
+      }),
+    ).toThrow("Duplicate route path '/legal/'");
+  });
 });
 
 describe("LandingPageData", () => {
@@ -106,5 +146,28 @@ describe("LandingPageData", () => {
         ],
       }),
     ).toThrow("body route");
+  });
+
+  it("rejects a model route path that would traverse out of the entry directory", () => {
+    expect(() =>
+      validateLandingPageData({
+        version: 1,
+        kind: "adapter",
+        routes: [{ path: "/../", body: "<h1>escaped</h1>", metadata }],
+      }),
+    ).toThrow("invalid segment");
+  });
+
+  it("rejects a model that declares one route path twice", () => {
+    expect(() =>
+      validateLandingPageData({
+        version: 1,
+        kind: "adapter",
+        routes: [
+          { path: "/", body: "<main>a</main>", metadata },
+          { path: "/", body: "<main>b</main>", metadata },
+        ],
+      }),
+    ).toThrow("Duplicate route path '/'");
   });
 });

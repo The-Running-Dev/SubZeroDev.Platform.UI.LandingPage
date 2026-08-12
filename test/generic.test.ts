@@ -39,6 +39,24 @@ afterEach(async () => {
 });
 
 describe("generic build", () => {
+  it("escapes the navigation URLs it is handed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-generic-escape-"));
+    roots.push(root);
+    const outDir = join(root, "site", "dist");
+    await buildGenericData(root, outDir, {
+      version: 1,
+      kind: "generic",
+      home: { markdown: "# Home\n\nA description paragraph." },
+      changelog: { markdown: "# Changelog\n\n- one" },
+      docsUrl: '"><script>alert(1)</script><a href="',
+      repositoryUrl: '" onmouseover="steal()',
+    });
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).not.toContain("<script>alert(1)</script>");
+    expect(home).not.toContain('onmouseover="steal()"');
+    expect(home).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+  });
+
   it("builds sanitized JSON Markdown with inline theme CSS", async () => {
     const root = await mkdtemp(join(tmpdir(), "szd-generic-json-"));
     roots.push(root);

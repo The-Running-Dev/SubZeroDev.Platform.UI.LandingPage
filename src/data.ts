@@ -3,7 +3,7 @@ import type {
   LandingPageEntryRoute,
   LandingPageMetadata,
 } from "./index.js";
-import { assertRoute } from "./route.js";
+import { assertRoute, assertUniquePaths } from "./route.js";
 
 export type LandingPageMarkdown = {
   markdown: string;
@@ -293,18 +293,7 @@ export function validateLandingPageData(raw: unknown): LandingPageData {
       "LandingPageData adapter.routes must be a non-empty array.",
     );
   const routes = item.routes.map(route);
-  const paths = new Set<string>();
-  for (const entry of routes) {
-    if (typeof entry.path !== "string" || !/^\/(?:[^/]+\/)*$/.test(entry.path))
-      throw new Error(
-        `LandingPageData route path '${String(entry.path)}' is invalid.`,
-      );
-    if (paths.has(entry.path))
-      throw new Error(
-        `LandingPageData declares duplicate route path '${entry.path}'.`,
-      );
-    paths.add(entry.path);
-  }
+  assertUniquePaths(routes);
   return {
     version: 1,
     kind: "adapter",
