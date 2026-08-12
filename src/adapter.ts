@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { build as viteBuild, createServer } from "vite";
 import { tsImport } from "tsx/esm/api";
 import type { LandingPageConfig } from "./index.js";
+import type { SourceMap } from "subzerodev-data-json";
 import { assertRoute, isBodyRoute } from "./route.js";
 
 async function exists(path: string): Promise<boolean> {
@@ -56,6 +57,7 @@ function meta(property: string, content: string): string {
 function html(
   route: LandingPageConfig["routes"][number],
   root: string,
+  runtimeMap?: SourceMap,
 ): string {
   const { metadata } = route;
   const canonical = metadata.canonicalUrl
@@ -107,7 +109,7 @@ function html(
       : "";
   const body = isBodyRoute(route)
     ? `${route.body}${noScript}`
-    : `<div id="root"></div>${noScript}<script type="module" src="/${relative(root, resolve(root, route.entry)).replaceAll("\\", "/")}"></script>`;
+    : `<div id="root"></div>${noScript}${runtimeMap ? `<script type="application/json" id="szd-json-sources">${JSON.stringify(runtimeMap).replaceAll("<", "\\u003c")}</script>` : ""}<script type="module" src="/${relative(root, resolve(root, route.entry)).replaceAll("\\", "/")}"></script>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(metadata.title)}</title><meta name="description" content="${escapeHtml(metadata.description)}">${canonical}${image}${openGraph}${twitter}${themeColor}${icons}${stylesheet}</head><body>${body}</body></html>`;
 }
 
@@ -125,7 +127,42 @@ export async function buildAdapter(
 ): Promise<void> {
   const adapterPath = resolve(root, adapter);
   const config = await loadAdapter(adapterPath);
-  const siteRoot = dirname(adapterPath);
+  await buildAdapterConfig(root, dirname(adapterPath), config, outDir);
+}
+
+function filteredMap(
+  route: LandingPageConfig["routes"][number],
+  map: SourceMap | undefined,
+): SourceMap | undefined {
+  if (isBodyRoute(route) || route.dataSourceIds === undefined) return undefined;
+  if (!map)
+    throw new Error(
+      `Route '${route.path}' declares dataSourceIds without a JSON source map.`,
+    );
+  const sources: Record<string, SourceMap["sources"][string]> = {};
+  for (const id of route.dataSourceIds) {
+    const source = map.sources[id];
+    if (!source)
+      throw new Error(
+        `Route '${route.path}' declares unknown data source '${id}'.`,
+      );
+    if ("path" in source && source.at === "runtime")
+      throw new Error(
+        `Route '${route.path}' declares runtime file source '${id}'.`,
+      );
+    sources[id] = source;
+  }
+  return { version: 1, sources };
+}
+
+export async function buildAdapterConfig(
+  root: string,
+  siteRoot: string,
+  config: LandingPageConfig,
+  outDir: string,
+  runtimeSourceMap?: SourceMap,
+): Promise<void> {
+  for (const route of config.routes) assertRoute(route);
   const temporary = join(siteRoot, `.szd-tmp-${process.pid}`);
   await rm(temporary, { recursive: true, force: true });
   await mkdir(temporary, { recursive: true });
@@ -135,7 +172,11 @@ export async function buildAdapter(
       const output = outputEntry(route.path);
       const entryFile = join(temporary, output);
       await mkdir(dirname(entryFile), { recursive: true });
-      await writeFile(entryFile, html(route, siteRoot), "utf8");
+      await writeFile(
+        entryFile,
+        html(route, siteRoot, filteredMap(route, runtimeSourceMap)),
+        "utf8",
+      );
       input[output.replaceAll("/", "_").replace(/\.html$/, "")] = entryFile;
     }
     await viteBuild({

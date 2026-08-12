@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defineLandingPage } from "../src/index.js";
+import { defineLandingPage, validateLandingPageData } from "../src/index.js";
 
 const metadata = { title: "Home", description: "Home page" };
 
@@ -66,5 +66,45 @@ describe("defineLandingPage", () => {
         ],
       }),
     ).toThrow("belongs to a body route");
+  });
+});
+
+describe("LandingPageData", () => {
+  it("accepts the versioned generic model", () => {
+    expect(
+      validateLandingPageData({
+        version: 1,
+        kind: "generic",
+        home: { markdown: "# Home\n\nDescription." },
+        changelog: { markdown: "# Changelog\n\n- First" },
+        themeCss: "body { color: rebeccapurple; }",
+      }),
+    ).toMatchObject({ kind: "generic", version: 1 });
+  });
+
+  it("rejects unknown fields and runtime data on a body route", () => {
+    expect(() =>
+      validateLandingPageData({
+        version: 1,
+        kind: "generic",
+        home: { markdown: "# Home\n\nDescription." },
+        changelog: { markdown: "# Changelog\n\n- First" },
+        unexpected: true,
+      }),
+    ).toThrow("unknown field");
+    expect(() =>
+      validateLandingPageData({
+        version: 1,
+        kind: "adapter",
+        routes: [
+          {
+            path: "/",
+            body: "<main>Home</main>",
+            dataSourceIds: ["runtime"],
+            metadata,
+          },
+        ],
+      }),
+    ).toThrow("body route");
   });
 });

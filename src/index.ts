@@ -44,7 +44,17 @@ export type LandingPageEntryRoute = {
   entry: string;
   metadata: LandingPageMetadata;
   hydrate?: boolean;
+  dataSourceIds?: readonly string[];
 };
+
+export type {
+  AdapterLandingPageData,
+  GenericLandingPageData,
+  LandingPageData,
+  LandingPageDataRoute,
+  LandingPageMarkdown,
+} from "./data.js";
+export { validateLandingPageData } from "./data.js";
 
 /** A route whose document body is supplied by the caller and loads no script. */
 export type LandingPageBodyRoute = {

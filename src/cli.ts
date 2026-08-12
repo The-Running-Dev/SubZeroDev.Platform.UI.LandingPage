@@ -2,12 +2,21 @@
 import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { buildAdapter, devAdapter, hasAdapter } from "./adapter.js";
+import { buildAdapterConfig } from "./adapter.js";
 import { generateChangelog } from "./changelog.js";
-import { buildGeneric, type GenericOptions } from "./generic.js";
+import {
+  buildGeneric,
+  buildGenericData,
+  type GenericOptions,
+} from "./generic.js";
 import { mergeLanding } from "./merge.js";
+import { validateLandingPageData } from "./data.js";
+import { createJsonLoader, type SourceMap } from "subzerodev-data-json";
+import { prefetch } from "subzerodev-data-json/build";
+import { nodePorts, readSourceMap } from "subzerodev-data-json/node";
 
 const command = process.argv[2];
 const parsed = parseArgs({
@@ -33,6 +42,8 @@ const parsed = parseArgs({
     "docs-output": { type: "string" },
     "protected-path": { type: "string" },
     port: { type: "string" },
+    "source-map": { type: "string" },
+    "source-id": { type: "string" },
   },
   allowPositionals: false,
 }).values;
@@ -52,9 +63,96 @@ const options: GenericOptions = {
   docsUrl: parsed["docs-url"],
 };
 
+const sourceMapArgument = process.argv
+  .slice(3)
+  .some(
+    (argument) =>
+      argument === "--source-map" || argument.startsWith("--source-map="),
+  );
+
+function validatePublicSources(map: SourceMap): void {
+  for (const [id, source] of Object.entries(map.sources)) {
+    if ("headers" in source && source.headers !== undefined)
+      throw new Error(`Public JSON source '${id}' must not declare headers.`);
+    if (source.at === "runtime" && "path" in source)
+      throw new Error(
+        `Public JSON source '${id}' must not declare a runtime file source.`,
+      );
+  }
+}
+
+async function buildJsonData(
+  outDir: string,
+  sourceMapPath: string,
+): Promise<void> {
+  const map = await readSourceMap(sourceMapPath);
+  validatePublicSources(map);
+  const sourceId = parsed["source-id"] ?? "landing-page";
+  const rootSource = map.sources[sourceId];
+  if (!rootSource)
+    throw new Error(
+      `JSON source '${sourceId}' is not declared in '${sourceMapPath}'.`,
+    );
+  if (rootSource.at !== "build")
+    throw new Error(`JSON source '${sourceId}' must declare at: build.`);
+  const temporary = await mkdtemp(join(tmpdir(), "szd-landing-json-"));
+  try {
+    const prefetched = await prefetch(map, temporary, nodePorts());
+    const loader = createJsonLoader(prefetched.runtimeMap, nodePorts());
+    const result = await loader.load({
+      id: sourceId,
+      validate: (raw) => {
+        try {
+          return { ok: true as const, value: validateLandingPageData(raw) };
+        } catch (error) {
+          return {
+            ok: false as const,
+            message: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    });
+    if (!result.ok)
+      throw new Error(`JSON source '${sourceId}' failed: ${result.message}`);
+    const data = result.data;
+    if (data.kind === "generic") await buildGenericData(root, outDir, data);
+    else
+      await buildAdapterConfig(
+        root,
+        dirname(sourceMapPath),
+        {
+          routes: data.routes,
+          ...(data.allow ? { allow: data.allow } : {}),
+          ...(data.publicDir ? { publicDir: data.publicDir } : {}),
+        },
+        outDir,
+        prefetched.runtimeMap,
+      );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+}
+
 async function build(outDir = options.outDir): Promise<void> {
   await rm(outDir, { recursive: true, force: true });
-  if (await hasAdapter(root, parsed.adapter ?? "site/landing.config.ts"))
+  const sourceMapPath = resolve(
+    root,
+    parsed["source-map"] ?? "site/sources.public.yml",
+  );
+  if (
+    await (async () => {
+      try {
+        await readFile(sourceMapPath, "utf8");
+        return true;
+      } catch {
+        return false;
+      }
+    })()
+  )
+    await buildJsonData(outDir, sourceMapPath);
+  else if (sourceMapArgument)
+    throw new Error(`JSON source map not found at '${sourceMapPath}'.`);
+  else if (await hasAdapter(root, parsed.adapter ?? "site/landing.config.ts"))
     await buildAdapter(
       root,
       parsed.adapter ?? "site/landing.config.ts",

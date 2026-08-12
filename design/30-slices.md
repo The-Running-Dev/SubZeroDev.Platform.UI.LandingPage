@@ -40,3 +40,23 @@ consumer's configuration builds unchanged.
 Published handoff: npm `subzerodev-platform-ui-landing-page@0.3.0` from
 source commit `ab44435e3bc1af90509dd0364856a84aa7d932e8`; consumers pin the
 package version exactly.
+
+## UI4 — JSON-backed landing data
+
+**Status:** implementation complete; release pending
+
+Delivers a versioned JSON site model through `subzerodev-data-json`, preferred
+when a public source map exists and falling back to the current TypeScript
+adapter and README/changelog modes only when it does not. The root model resolves
+at build time. Entry routes may expose a filtered public source map to consumer
+code through escaped inert `#szd-json-sources`; generic and body routes remain
+static. Validation rejects malformed models, invalid routes, undeclared source
+ids, public headers, and runtime file sources.
+
+**Dependency:** exact npm `subzerodev-data-json@0.2.0`, the first immutable
+release exporting `readSourceMap` from `subzerodev-data-json/node`.
+
+**Done when:** positive builds cover generic, entry, body, local-file,
+build-time HTTP, and mixed build/runtime auxiliary sources; negative tests cover
+every validator; declared JSON failure never falls back; and legacy adapter and
+Markdown builds remain unchanged with no source map.

@@ -1,5 +1,43 @@
 # Decisions
 
+### 2026-08-13 — UI4 pins Data.Json 0.2.0
+
+Context: the UI4 dependency gate required an immutable npm release exporting
+`readSourceMap`; registry `0.1.0` did not include it. The newly published
+`subzerodev-data-json@0.2.0` exports the reader from `/node` alongside the
+prefetch and Node-port APIs UI4 needs.
+Chosen: pin `subzerodev-data-json` exactly at `0.2.0` and implement UI4 against
+that package. The landing package reads only the public map through Data.Json,
+prefetches build-time values, and emits route-filtered inert runtime maps.
+Rejected: a version range — it weakens the immutable consumer boundary; a local
+reader — it duplicates the dependency's contract; a Git commit dependency — it
+is not a released package artifact.
+Reversibility: moderate. A correction requires a new immutable landing-package
+release and an exact replacement dependency version.
+
+### 2026-08-13 — Landing data moves through Data.Json without changing static-route ownership
+
+Context: the generic builder reads Markdown directly and custom consumers encode
+route primitives in TypeScript, while Docs-Template already carries an
+independent YAML-to-JSON loading path. `subzerodev-data-json` exists to make the
+source, timing and validation of a JSON payload declarative, but its published
+`0.1.0` does not yet export the source-map reader needed to use the public YAML
+map safely.
+Chosen: define UI4 as an additive, JSON-backed `LandingPageData` path. A public
+source map and build-time root source take precedence over the existing adapter
+and Markdown inputs; declared JSON errors fail rather than falling back. Entry
+routes alone may expose declared public runtime sources through inert
+`#szd-json-sources`, and consumer code owns any loader or React provider. Body
+and generic routes remain static. UI4 is blocked until the first immutable npm
+release exporting `readSourceMap`, which it will pin exactly.
+Rejected: **a local YAML reader** — duplicates Data.Json's contract and lets the
+two validators drift. **a Git SHA dependency** — does not provide the immutable
+package boundary consumers need. **package-owned React wiring** — makes React a
+toolkit dependency and narrows the adapter seam. **runtime generic or body
+rendering** — reverses their no-script static contract.
+Reversibility: moderate. The JSON path is additive during `0.x`; withdrawing it
+after consumers adopt it needs a breaking release.
+
 ### 2026-08-05 — A route declares either an entry module or its own document body
 
 Context: `0.2.0` composes one body for every custom-adapter route: `<div id="root"></div>` plus a module

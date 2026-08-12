@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildGeneric } from "../src/generic.js";
+import { buildGeneric, buildGenericData } from "../src/generic.js";
 
 const roots: string[] = [];
 async function fixture(): Promise<string> {
@@ -39,6 +39,27 @@ afterEach(async () => {
 });
 
 describe("generic build", () => {
+  it("builds sanitized JSON Markdown with inline theme CSS", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-generic-json-"));
+    roots.push(root);
+    const outDir = join(root, "site", "dist");
+    await buildGenericData(root, outDir, {
+      version: 1,
+      kind: "generic",
+      home: {
+        markdown: "# JSON home\n\nSafe prose.\n\n<script>alert(1)</script>",
+      },
+      changelog: { markdown: "# Changelog\n\n- JSON release" },
+      themeCss: "body { color: rebeccapurple; }",
+    });
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).toContain("JSON home");
+    expect(home).not.toContain("<script>alert");
+    expect(
+      await readFile(join(outDir, "assets", "theme.css"), "utf8"),
+    ).toContain("rebeccapurple");
+  });
+
   it("renders both pages, appends site README, copies assets, and loads theme last", async () => {
     const root = await fixture();
     const outDir = join(root, "site", "dist");

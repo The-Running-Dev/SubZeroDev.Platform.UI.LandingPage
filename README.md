@@ -15,6 +15,21 @@ The default inputs are `README.md`, `CHANGELOG.md`, optional `site/README.md`,
 optional `site/theme.css`, and optional `site/public/`. The build writes
 `site/dist/` with `/` and `/changelog/`.
 
+## JSON site data
+
+When `site/sources.public.yml` exists, the builder reads the `landing-page`
+source through `subzerodev-data-json@0.2.0`. Pass `--source-map` and
+`--source-id` to select another map or source. The selected root source must
+use `at: build`; an unavailable or invalid declared source fails the build and
+does not fall back to legacy inputs.
+
+Its JSON payload is a versioned `LandingPageData` object. A `generic` model
+carries home, optional supplemental, and changelog Markdown; an `adapter` model
+carries the same route declarations as the TypeScript adapter. Entry routes can
+declare `dataSourceIds`; their filtered public map is emitted as inert JSON in
+`#szd-json-sources` for consumer code to parse and load. Generic and body
+routes remain static and make no runtime data request.
+
 ## Custom adapter
 
 Existing frontend sites can export `defineLandingPage(...)` from

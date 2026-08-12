@@ -60,4 +60,55 @@ describe("packed artifact", () => {
       await readFile(join(consumer, "site", "dist", "index.html"), "utf8"),
     ).toContain("Packed");
   }, 120000);
+
+  it("prefers a Data.Json landing model and emits its entry runtime map", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-json-packed-"));
+    roots.push(root);
+    await run("npm", ["pack", "--pack-destination", root], process.cwd());
+    const tarball = join(
+      root,
+      (await readdir(root)).find((name) => name.endsWith(".tgz"))!,
+    );
+    const consumer = join(root, "consumer");
+    await mkdir(join(consumer, "site", "src"), { recursive: true });
+    await writeFile(
+      join(consumer, "site", "sources.public.yml"),
+      "version: 1\nsources:\n  landing-page:\n    at: build\n    path: site/landing.json\n    cache: manual\n  runtime:\n    at: runtime\n    url: https://example.test/data.json\n    cache: manual\n",
+      "utf8",
+    );
+    await writeFile(
+      join(consumer, "site", "landing.json"),
+      JSON.stringify({
+        version: 1,
+        kind: "adapter",
+        routes: [
+          {
+            path: "/",
+            entry: "src/main.ts",
+            dataSourceIds: ["runtime"],
+            metadata: { title: "JSON", description: "Loaded from JSON" },
+          },
+        ],
+      }),
+      "utf8",
+    );
+    await writeFile(
+      join(consumer, "site", "src", "main.ts"),
+      "export {};",
+      "utf8",
+    );
+    await run("npm", ["install", "--no-save", tarball], consumer);
+    await run(
+      "npx",
+      ["--no-install", "subzerodev-platform-ui-landing-page", "build"],
+      consumer,
+    );
+    const html = await readFile(
+      join(consumer, "site", "dist", "index.html"),
+      "utf8",
+    );
+    expect(html).toContain('id="szd-json-sources"');
+    expect(html).toContain('"runtime"');
+    expect(html).not.toContain('"landing-page"');
+  }, 120000);
 });

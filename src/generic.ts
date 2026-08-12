@@ -8,6 +8,7 @@ import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { baseCss } from "./baseCss.js";
 import { inferRepository } from "./git.js";
+import type { GenericLandingPageData, LandingPageMarkdown } from "./data.js";
 
 export type GenericOptions = {
   root: string;
@@ -135,6 +136,26 @@ async function readDocument(
   return { source, path, html: await render(rewritten) };
 }
 
+async function readMarkdown(
+  document: LandingPageMarkdown,
+  root: string,
+  outDir: string,
+): Promise<MarkdownDocument> {
+  const assetBase = resolve(root, document.assetBase ?? ".");
+  const sourcePath = join(assetBase, "landing.md");
+  const rewritten = await copyReferences(
+    document.markdown,
+    sourcePath,
+    root,
+    outDir,
+  );
+  return {
+    source: document.markdown,
+    path: sourcePath,
+    html: await render(rewritten),
+  };
+}
+
 function documentHtml(
   title: string,
   description: string,
@@ -227,6 +248,81 @@ export async function buildGeneric(options: GenericOptions): Promise<void> {
       description,
       changelog.html,
       resolved,
+      "changelog",
+    ),
+    "utf8",
+  );
+}
+
+/** Builds the generic shell from a validated JSON site model. */
+export async function buildGenericData(
+  root: string,
+  outDir: string,
+  data: GenericLandingPageData,
+): Promise<void> {
+  await mkdir(outDir, { recursive: true });
+  const home = await readMarkdown(data.home, root, outDir);
+  const headings = h1s(home.source);
+  if (headings.length !== 1)
+    throw new Error(
+      `JSON home Markdown must contain exactly one level-one heading; found ${headings.length}.`,
+    );
+  const title = data.title ?? headings[0];
+  const description = data.description ?? firstParagraph(home.source);
+  if (!description)
+    throw new Error(
+      "JSON home Markdown needs a non-heading prose paragraph for the site description.",
+    );
+  const inferred = await inferRepository(root).catch(() => undefined);
+  const options: GenericOptions = {
+    root,
+    readme: "",
+    siteReadme: "",
+    changelog: "",
+    css: "",
+    publicDir: data.publicDir ?? "site/public",
+    outDir,
+    title,
+    description,
+    repositoryUrl:
+      data.repositoryUrl ??
+      (inferred ? `https://github.com/${inferred}` : undefined),
+    canonicalUrl: data.canonicalUrl,
+    docsUrl: data.docsUrl,
+  };
+  const supplemental = data.supplemental
+    ? await readMarkdown(data.supplemental, root, outDir)
+    : undefined;
+  const changelog = await readMarkdown(data.changelog, root, outDir);
+  await mkdir(join(outDir, "assets"), { recursive: true });
+  await writeFile(join(outDir, "assets", "szd-base.css"), baseCss, "utf8");
+  await writeFile(
+    join(outDir, "assets", "theme.css"),
+    data.themeCss ?? "",
+    "utf8",
+  );
+  const publicPath = resolve(root, options.publicDir);
+  if (await exists(publicPath))
+    await cp(publicPath, outDir, { recursive: true });
+  await writeFile(
+    join(outDir, "index.html"),
+    documentHtml(
+      title,
+      description,
+      `${home.html}${supplemental ? `\n${supplemental.html}` : ""}`,
+      options,
+      "home",
+    ),
+    "utf8",
+  );
+  await mkdir(join(outDir, "changelog"), { recursive: true });
+  await writeFile(
+    join(outDir, "changelog", "index.html"),
+    documentHtml(
+      `Changelog — ${title}`,
+      description,
+      changelog.html,
+      options,
       "changelog",
     ),
     "utf8",
