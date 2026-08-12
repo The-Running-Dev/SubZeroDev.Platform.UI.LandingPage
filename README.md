@@ -42,6 +42,12 @@ metadata can carry canonical, Open Graph, X/Twitter, icon, theme-colour and
 `<noscript>` values; the adapter emits only the optional fields declared by that
 route.
 
+A route `path` starts and ends with `/`, and each segment between them matches
+`[A-Za-z0-9._-]+` — so `/`, `/roadmap/` and `/docs/v1.2/` are paths, while
+`/about`, `/../` and `/a//` are errors. Two routes may not declare one path.
+Both rules apply identically to a `defineLandingPage` configuration and to a
+`LandingPageData` model.
+
 An `entry` route names a module, and its document is the toolkit shell —
 `<div id="root"></div>` plus a module script — with `hydrate` available for a
 server-rendered mount. A `body` route supplies the document body itself; that
