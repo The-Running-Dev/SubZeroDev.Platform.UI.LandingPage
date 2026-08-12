@@ -40,8 +40,16 @@ async function fixture(sourceMap: string): Promise<string> {
   return root;
 }
 
-function build(root: string) {
-  return exec(`node --import tsx "${cli}" build`, { cwd: root });
+function build(root: string, args = "") {
+  return exec(`node --import tsx "${cli}" build${args}`, { cwd: root });
+}
+
+/** A port nothing listens on, so a declared URL source fails to connect. */
+async function deadPort(): Promise<number> {
+  const port = await serve({});
+  await new Promise<void>((resolve) => servers[0].close(() => resolve()));
+  servers.length = 0;
+  return port;
 }
 
 afterEach(async () => {
@@ -85,9 +93,7 @@ describe("JSON source resolution", () => {
   }, 60000);
 
   it("fails the build when a declared URL source cannot be reached", async () => {
-    const port = await serve(model);
-    await new Promise<void>((resolve) => servers[0].close(() => resolve()));
-    servers.length = 0;
+    const port = await deadPort();
     const root = await fixture(
       `version: 1\nsources:\n  landing-page:\n    at: build\n    url: http://127.0.0.1:${port}/landing.json\n    cache: manual\n`,
     );
@@ -102,6 +108,54 @@ describe("JSON source resolution", () => {
       "version: 1\nsources:\n  landing-page:\n    at: build\n    url: https://example.test/landing.json\n    cache: manual\n    headers:\n      authorization: token\n",
     );
     await expect(build(root)).rejects.toThrow(/must not declare headers/);
+  }, 60000);
+
+  it("falls back to a declared bundled source, loudly, when the root fails", async () => {
+    const port = await deadPort();
+    const root = await fixture(
+      `version: 1\nsources:\n  landing-page:\n    at: build\n    url: http://127.0.0.1:${port}/landing.json\n    cache: manual\n  landing-page-bundled:\n    at: build\n    path: site/landing.json\n    cache: manual\n`,
+    );
+    await writeFile(
+      join(root, "site", "landing.json"),
+      JSON.stringify({
+        ...model,
+        home: { markdown: "# Bundled site\n\nThe fallback was used." },
+      }),
+      "utf8",
+    );
+    const { stderr } = await build(
+      root,
+      " --fallback-source-id landing-page-bundled",
+    );
+    expect(stderr).toContain("Falling back to 'landing-page-bundled'");
+    expect(
+      await readFile(join(root, "site", "dist", "index.html"), "utf8"),
+    ).toContain("<h1>Bundled site</h1>");
+  }, 60000);
+
+  it("does not fall back when a source other than the root is what failed", async () => {
+    const port = await deadPort();
+    const root = await fixture(
+      `version: 1\nsources:\n  landing-page:\n    at: build\n    path: site/landing.json\n    cache: manual\n  auxiliary:\n    at: build\n    url: http://127.0.0.1:${port}/aux.json\n    cache: manual\n  landing-page-bundled:\n    at: build\n    path: site/landing.json\n    cache: manual\n`,
+    );
+    await writeFile(
+      join(root, "site", "landing.json"),
+      JSON.stringify(model),
+      "utf8",
+    );
+    await expect(
+      build(root, " --fallback-source-id landing-page-bundled"),
+    ).rejects.toThrow(/auxiliary/);
+  }, 60000);
+
+  it("rejects a fallback source that is not declared in the map", async () => {
+    const port = await deadPort();
+    const root = await fixture(
+      `version: 1\nsources:\n  landing-page:\n    at: build\n    url: http://127.0.0.1:${port}/landing.json\n    cache: manual\n`,
+    );
+    await expect(build(root, " --fallback-source-id absent")).rejects.toThrow(
+      /fallback source 'absent' is not declared/,
+    );
   }, 60000);
 
   it("rejects a root source that does not resolve at build time", async () => {

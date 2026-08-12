@@ -1,5 +1,33 @@
 # Decisions
 
+### 2026-08-13 — A failed root model may fall back to a declared source, opt-in and loudly
+
+Context: Docs-Template resolves each content document from a bundled default or
+a configured remote URL, and when the remote fails it keeps the bundled default.
+UI4 chose the opposite — a declared source that fails ends the build — so a
+consumer moving a landing site to a published artifact loses the property that
+its site still builds when the publisher is briefly unreachable. The gap was
+first estimated as passing `JsonRequest.fallback` at the loader call. That is
+wrong: `prefetch` resolves every `at: build` entry and throws `build.failed`
+before returning, so the loader call is never reached and the request-level
+fallback governs nothing here.
+Chosen: an optional `--fallback-source-id` naming another `at: build` source in
+the same public map. When `prefetch` fails and the root model is the _single_
+failed source, the root entry is replaced by the fallback entry and the prefetch
+is retried. Substitution is written to stderr naming the failed source, its
+reason and the fallback. Default behaviour is unchanged: with no flag, a failure
+still ends the build.
+Rejected: **Docs-Template's implicit fallback** — it is silent, and a landing
+site that quietly serves month-old copy is a worse outcome than one that fails
+to build, because nobody is watching a static site the way a maintainer watches
+a docs app. **Falling back for any failed source** — an auxiliary source failing
+says nothing about whether the root is trustworthy, and recovering from it would
+hide a broken publisher behind a working home page. **A `--fallback-path` naming
+a file directly** — it would be a second source mechanism beside the map, which
+is the duplication `subzerodev-data-json` exists to remove.
+Reversibility: high. The flag is additive and defaults to the previous
+behaviour, so withdrawing it affects only consumers who opted in.
+
 ### 2026-08-13 — A consumer owns its own content loader; the package owns the site model
 
 Context: Docs-Template resolves many feature-scoped content documents — projects,

@@ -21,7 +21,9 @@ When `site/sources.public.yml` exists, the builder reads the `landing-page`
 source through `subzerodev-data-json@0.2.0`. Pass `--source-map` and
 `--source-id` to select another map or source. The selected root source must
 use `at: build`; an unavailable or invalid declared source fails the build and
-does not fall back to legacy inputs.
+does not fall back to legacy inputs. Pass `--fallback-source-id` to name another
+`at: build` source that replaces the root model when the root is the only source
+that failed; the substitution is reported on stderr rather than made silently.
 
 Its JSON payload is a versioned `LandingPageData` object. A `generic` model
 carries home, optional supplemental, and changelog Markdown; an `adapter` model

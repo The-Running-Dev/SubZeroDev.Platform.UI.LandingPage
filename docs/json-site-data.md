@@ -68,9 +68,40 @@ CI by changing one line of the source map, with no code change and no second
 loader. `test/json-source.test.ts` asserts the two forms produce byte-identical
 output.
 
-Unlike a runtime documentation site, a landing build never falls back to bundled
-data when a declared URL fails: the build fails and the previous deployment
-stands. Prefer that to publishing a site whose content silently reverted.
+## Falling back to a bundled copy
+
+By default a declared source that fails ends the build, and the previous
+deployment stands. Where a site should keep building when its publisher is
+briefly unreachable, declare a bundled copy beside the remote one and name it:
+
+```yaml
+# site/sources.public.yml
+version: 1
+sources:
+  landing-page:
+    at: build
+    url: https://the-running-dev.github.io/Data/landing/landing.json
+    cache: manual
+  landing-page-bundled:
+    at: build
+    path: site/landing.json
+    cache: manual
+```
+
+```powershell
+subzerodev-platform-ui-landing-page build --fallback-source-id landing-page-bundled
+```
+
+This is Docs-Template's bundled-default behaviour, with two deliberate
+differences. It is **opt-in** — with no flag the build still fails. And it is
+**loud**: the substitution is written to stderr naming the failed source, its
+reason and the fallback used, because a landing site that quietly serves stale
+copy is worse than one that fails to build. Nobody watches a static site the way
+a maintainer watches a docs app.
+
+The fallback applies only when the root model is the single source that failed.
+An auxiliary source failing says nothing about whether the root is trustworthy,
+so it still ends the build.
 
 A model fetched over HTTP is trusted to the same degree as the code that
 composes the page. For `kind: "generic"` the Markdown is sanitized, so a

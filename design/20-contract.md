@@ -53,6 +53,14 @@ sources, and validates the root payload through `subzerodev-data-json`; it does
 not parse YAML or fetch JSON independently. Public source-map entries may not
 declare headers. Runtime file sources are rejected.
 
+`--fallback-source-id` is optional and has no default. When it is absent a
+declared source that fails ends the build, unchanged. When it names a source,
+that source replaces the root model only if the root is the single source that
+failed to resolve; a failure of any other source, or of the root alongside
+another, still ends the build. The fallback must be declared in the same map and
+must declare `at: build`. A substitution is written to stderr naming the failed
+source, its reason and the fallback used — it is never silent.
+
 For every entry route with `dataSourceIds`, the package emits only its referenced
 sources as an escaped inert JSON `<script type="application/json"
 id="szd-json-sources">` immediately before the route module script. The text

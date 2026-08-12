@@ -14,8 +14,13 @@ import {
 } from "./generic.js";
 import { mergeLanding } from "./merge.js";
 import { validateLandingPageData } from "./data.js";
-import { createJsonLoader, type SourceMap } from "subzerodev-data-json";
-import { prefetch } from "subzerodev-data-json/build";
+import {
+  createJsonLoader,
+  JsonError,
+  type JsonPorts,
+  type SourceMap,
+} from "subzerodev-data-json";
+import { prefetch, type PrefetchOutput } from "subzerodev-data-json/build";
 import { nodePorts, readSourceMap } from "subzerodev-data-json/node";
 
 const command = process.argv[2];
@@ -44,6 +49,7 @@ const parsed = parseArgs({
     port: { type: "string" },
     "source-map": { type: "string" },
     "source-id": { type: "string" },
+    "fallback-source-id": { type: "string" },
   },
   allowPositionals: false,
 }).values;
@@ -81,6 +87,53 @@ function validatePublicSources(map: SourceMap): void {
   }
 }
 
+/**
+ * Prefetches the map, substituting a declared fallback source for the root model
+ * when — and only when — the root is the single source that failed. `prefetch`
+ * resolves every `at: build` entry before writing anything and throws
+ * `build.failed` naming each failure, so this is the only point at which a
+ * failed root can still be recovered. The substitution is announced: a landing
+ * site that quietly served stale content would be the failure this guards
+ * against, not the one it prevents.
+ */
+async function prefetchWithFallback(
+  map: SourceMap,
+  outDir: string,
+  ports: JsonPorts,
+  sourceId: string,
+  fallbackId: string | undefined,
+): Promise<PrefetchOutput> {
+  try {
+    return await prefetch(map, outDir, ports);
+  } catch (error) {
+    if (fallbackId === undefined) throw error;
+    if (!(error instanceof JsonError) || error.code !== "build.failed")
+      throw error;
+    const failures = error.failures;
+    if (failures.length !== 1 || failures[0].id !== sourceId) throw error;
+    const fallback = map.sources[fallbackId];
+    if (!fallback)
+      throw new Error(
+        `JSON fallback source '${fallbackId}' is not declared in the source map.`,
+      );
+    if (fallback.at !== "build")
+      throw new Error(
+        `JSON fallback source '${fallbackId}' must declare at: build.`,
+      );
+    console.warn(
+      `JSON source '${sourceId}' failed (${failures[0].reason}): ${failures[0].message}. Falling back to '${fallbackId}'.`,
+    );
+    return prefetch(
+      {
+        version: map.version,
+        sources: { ...map.sources, [sourceId]: fallback },
+      },
+      outDir,
+      ports,
+    );
+  }
+}
+
 async function buildJsonData(
   outDir: string,
   sourceMapPath: string,
@@ -97,7 +150,13 @@ async function buildJsonData(
     throw new Error(`JSON source '${sourceId}' must declare at: build.`);
   const temporary = await mkdtemp(join(tmpdir(), "szd-landing-json-"));
   try {
-    const prefetched = await prefetch(map, temporary, nodePorts());
+    const prefetched = await prefetchWithFallback(
+      map,
+      temporary,
+      nodePorts(),
+      sourceId,
+      parsed["fallback-source-id"],
+    );
     const loader = createJsonLoader(prefetched.runtimeMap, nodePorts());
     const result = await loader.load({
       id: sourceId,
