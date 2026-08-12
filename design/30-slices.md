@@ -64,8 +64,8 @@ Markdown builds remain unchanged with no source map.
 **Amended 2026-08-13:** "declared JSON failure never falls back" is now the
 default rather than the whole rule. `--fallback-source-id` opts into replacing a
 failed root model with another declared `at: build` source, and only when the
-root is the single failure. See `90-decisions.md` § *A failed root model may
-fall back to a declared source, opt-in and loudly*.
+root is the single failure. See `90-decisions.md` § _A failed root model may
+fall back to a declared source, opt-in and loudly_.
 
 **Not yet met:** `test/json-source.test.ts` covers the file-and-URL parity, the
 unreachable-URL failure, public headers and a non-build root source, and
