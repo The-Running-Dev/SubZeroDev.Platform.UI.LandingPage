@@ -4,8 +4,16 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { buildAdapter, devAdapter, hasAdapter } from "./adapter.js";
-import { buildAdapterConfig } from "./adapter.js";
+import {
+  buildAdapter,
+  buildAdapterConfig,
+  devAdapter,
+  hasAdapter,
+  isDataBacked,
+  loadAdapterExport,
+} from "./adapter.js";
+import type { LandingPageDataConfig } from "./index.js";
+import { assertRoute, assertUniquePaths } from "./route.js";
 import { generateChangelog } from "./changelog.js";
 import {
   buildGeneric,
@@ -192,12 +200,61 @@ async function buildJsonData(
   }
 }
 
+/**
+ * Builds a site whose routes are composed from validated build-time data. Each
+ * declared source resolves through its own validator, so a payload that does not
+ * match the consumer's type ends the build here rather than reaching composition.
+ * The root-model fallback does not apply: there is no root model to replace.
+ */
+async function buildAdapterData(
+  outDir: string,
+  sourceMapPath: string,
+  adapterPath: string,
+  declaration: LandingPageDataConfig<unknown>,
+): Promise<void> {
+  const map = await readSourceMap(sourceMapPath);
+  validatePublicSources(map);
+  const temporary = await mkdtemp(join(tmpdir(), "szd-landing-data-"));
+  try {
+    const prefetched = await prefetch(map, temporary, nodePorts());
+    const loader = createJsonLoader(prefetched.runtimeMap, nodePorts());
+    const entries = Object.entries(declaration.sources) as [
+      string,
+      { id: string; validate: (raw: unknown) => unknown },
+    ][];
+    const data: Record<string, unknown> = {};
+    for (const [key, source] of entries) {
+      if (!map.sources[source.id])
+        throw new Error(
+          `Adapter source '${key}' names JSON source '${source.id}', which is not declared in '${sourceMapPath}'.`,
+        );
+      const result = await loader.load({
+        id: source.id,
+        validate: source.validate as never,
+      });
+      if (!result.ok)
+        throw new Error(
+          `Adapter source '${key}' ('${source.id}') failed: ${result.message}`,
+        );
+      data[key] = result.data;
+    }
+    const config = declaration.config(data);
+    for (const route of config.routes) assertRoute(route);
+    assertUniquePaths(config.routes);
+    await buildAdapterConfig(root, dirname(adapterPath), config, outDir);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+}
+
 async function build(outDir = options.outDir): Promise<void> {
   await rm(outDir, { recursive: true, force: true });
   const sourceMapPath = resolve(
     root,
     parsed["source-map"] ?? "site/sources.public.yml",
   );
+  const adapter = parsed.adapter ?? "site/landing.config.ts";
+  const adapterExists = await hasAdapter(root, adapter);
   if (
     await (async () => {
       try {
@@ -207,16 +264,22 @@ async function build(outDir = options.outDir): Promise<void> {
         return false;
       }
     })()
-  )
+  ) {
+    // An adapter declaring build-time sources is that data's consumer, so it
+    // outranks the root model. An adapter that declares none falls through, and
+    // a consumer holding both files therefore builds exactly as it did before.
+    if (adapterExists) {
+      const adapterPath = resolve(root, adapter);
+      const declaration = await loadAdapterExport(adapterPath);
+      if (isDataBacked(declaration)) {
+        await buildAdapterData(outDir, sourceMapPath, adapterPath, declaration);
+        return;
+      }
+    }
     await buildJsonData(outDir, sourceMapPath);
-  else if (sourceMapArgument)
+  } else if (sourceMapArgument)
     throw new Error(`JSON source map not found at '${sourceMapPath}'.`);
-  else if (await hasAdapter(root, parsed.adapter ?? "site/landing.config.ts"))
-    await buildAdapter(
-      root,
-      parsed.adapter ?? "site/landing.config.ts",
-      outDir,
-    );
+  else if (adapterExists) await buildAdapter(root, adapter, outDir);
   else await buildGeneric({ ...options, outDir });
 }
 

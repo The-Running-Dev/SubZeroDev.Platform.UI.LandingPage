@@ -3,8 +3,10 @@
 The public executable is `subzerodev-platform-ui-landing-page`. It exports
 `defineLandingPage`, `LandingPageConfig`, `LandingPageRoute`,
 `LandingPageEntryRoute`, `LandingPageBodyRoute`, `LandingPageMetadata`,
-`LandingPageOpenGraphMetadata`, `LandingPageTwitterMetadata`, and
-`LandingPageIcon`. Generic selectors start `szd-`; generic tokens start
+`LandingPageOpenGraphMetadata`, `LandingPageTwitterMetadata`,
+`LandingPageIcon`, `defineLandingPageData`, `LandingPageDataConfig`,
+`LandingPageDataSource`, and `LandingPageDataSources`. Generic selectors start
+`szd-`; generic tokens start
 `--szd-`. CLI input and error behavior is specified in the repository README.
 
 ## Route paths
@@ -68,6 +70,29 @@ escapes `<` so a payload cannot terminate the script. The consumer entry owns
 parsing it and constructing any Data.Json loader. The `szd-json-sources` id is
 part of the public DOM contract. Generic and body routes emit no runtime source
 map and initiate no data request.
+
+## Routes composed from build-time data
+
+`defineLandingPageData(sources, config)` declares a site whose routes are
+composed from validated build-time JSON. `sources` carries one entry per key of
+the consumer's `T`, each naming a source id and a `Validator` for that key's
+type; declaring no source is an error, as is an entry without a string `id` and
+a `validate` function. `config` receives the resolved `T` and returns a
+`LandingPageConfig`.
+
+Every declared id must exist in the public source map. Each source resolves
+through its own validator, and a payload that fails ends the build before
+`config` runs. The package owns resolution and validation timing; it owns
+nothing about `T`, which is the consumer's, as is `config`. The validator is
+required rather than optional: an unchecked cast would make `T` a claim the
+package cannot support about JSON it never authored.
+
+When a source map and an adapter module both exist, an adapter that declares
+sources is selected over the root `LandingPageData` model, because such an
+adapter is that data's consumer. An adapter that declares none is not selected
+and the root model is used, so the precedence is additive. The
+`--fallback-source-id` substitution does not apply here: there is no root model
+to replace. An adapter declaring sources with no source map present is an error.
 
 ## Custom-adapter static head
 

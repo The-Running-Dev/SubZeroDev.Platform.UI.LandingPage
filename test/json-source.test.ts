@@ -158,6 +158,119 @@ describe("JSON source resolution", () => {
     );
   }, 60000);
 
+  it("composes routes from validated build-time data, file and URL alike", async () => {
+    const port = await serve({ items: [{ name: "Remote project" }] });
+    const root = await fixture(
+      `version: 1\nsources:\n  projects:\n    at: build\n    url: http://127.0.0.1:${port}/projects.json\n    cache: manual\n  testimonials:\n    at: build\n    path: site/testimonials.json\n    cache: manual\n`,
+    );
+    await writeFile(
+      join(root, "site", "testimonials.json"),
+      JSON.stringify({ items: [{ quote: "It built." }] }),
+      "utf8",
+    );
+    await writeFile(
+      join(root, "site", "landing.config.ts"),
+      `const list = (raw: any) =>
+         Array.isArray(raw?.items)
+           ? { ok: true as const, value: raw.items }
+           : { ok: false as const, message: "expected an items array" };
+       export default {
+         sources: {
+           projects: { id: "projects", validate: list },
+           testimonials: { id: "testimonials", validate: list },
+         },
+         config: (data: any) => ({
+           routes: [
+             {
+               path: "/",
+               body: "<main><h1>" + data.projects[0].name + "</h1><p>" + data.testimonials[0].quote + "</p></main>",
+               metadata: { title: "Composed", description: "From build-time data" },
+             },
+           ],
+         }),
+       };`,
+      "utf8",
+    );
+    await build(root);
+    const home = await readFile(
+      join(root, "site", "dist", "index.html"),
+      "utf8",
+    );
+    expect(home).toContain("<h1>Remote project</h1>");
+    expect(home).toContain("<p>It built.</p>");
+    expect(home).not.toContain("<script");
+  }, 60000);
+
+  it("fails the build when declared data does not satisfy its validator", async () => {
+    const root = await fixture(
+      "version: 1\nsources:\n  projects:\n    at: build\n    path: site/projects.json\n    cache: manual\n",
+    );
+    await writeFile(
+      join(root, "site", "projects.json"),
+      JSON.stringify({ wrong: true }),
+      "utf8",
+    );
+    await writeFile(
+      join(root, "site", "landing.config.ts"),
+      `export default {
+         sources: {
+           projects: {
+             id: "projects",
+             validate: (raw: any) =>
+               Array.isArray(raw?.items)
+                 ? { ok: true as const, value: raw.items }
+                 : { ok: false as const, message: "expected an items array" },
+           },
+         },
+         config: () => ({ routes: [] }),
+       };`,
+      "utf8",
+    );
+    await expect(build(root)).rejects.toThrow(/expected an items array/);
+  }, 60000);
+
+  it("rejects an adapter source naming an id the map does not declare", async () => {
+    const root = await fixture(
+      "version: 1\nsources:\n  projects:\n    at: build\n    path: site/projects.json\n    cache: manual\n",
+    );
+    await writeFile(
+      join(root, "site", "projects.json"),
+      JSON.stringify({ items: [] }),
+      "utf8",
+    );
+    await writeFile(
+      join(root, "site", "landing.config.ts"),
+      `export default {
+         sources: { projects: { id: "absent", validate: (raw: any) => ({ ok: true as const, value: raw }) } },
+         config: () => ({ routes: [] }),
+       };`,
+      "utf8",
+    );
+    await expect(build(root)).rejects.toThrow(/is not declared/);
+  }, 60000);
+
+  it("leaves an adapter declaring no sources on the root-model path", async () => {
+    const root = await fixture(
+      "version: 1\nsources:\n  landing-page:\n    at: build\n    path: site/landing.json\n    cache: manual\n",
+    );
+    await writeFile(
+      join(root, "site", "landing.json"),
+      JSON.stringify(model),
+      "utf8",
+    );
+    await writeFile(
+      join(root, "site", "landing.config.ts"),
+      `export default { routes: [{ path: "/", body: "<main>ignored</main>", metadata: { title: "I", description: "I" } }] };`,
+      "utf8",
+    );
+    const home = await readFile(
+      (await build(root), join(root, "site", "dist", "index.html")),
+      "utf8",
+    );
+    expect(home).toContain("<h1>Remote site</h1>");
+    expect(home).not.toContain("ignored");
+  }, 60000);
+
   it("rejects a root source that does not resolve at build time", async () => {
     const root = await fixture(
       "version: 1\nsources:\n  landing-page:\n    at: runtime\n    url: https://example.test/landing.json\n    cache: manual\n",

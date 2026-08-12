@@ -1,3 +1,4 @@
+import type { Validator } from "subzerodev-data-json";
 import { assertRoute, assertUniquePaths } from "./route.js";
 
 /** Static Open Graph fields emitted for a custom-adapter route. */
@@ -72,6 +73,54 @@ export type LandingPageConfig = {
   publicDir?: string;
   styles?: readonly string[];
 };
+
+/**
+ * One declared build-time source and the validator that gives it a type. The
+ * validator is required, not optional: `T` is the consumer's claim about JSON
+ * the package never authored, and an unchecked cast would make the type a lie.
+ */
+export type LandingPageDataSource<T> = {
+  id: string;
+  validate: Validator<T>;
+};
+
+/** One declared source per key of `T`, each carrying that key's validator. */
+export type LandingPageDataSources<T> = {
+  [K in keyof T]: LandingPageDataSource<T[K]>;
+};
+
+/**
+ * A site whose routes are composed from build-time data. The package resolves
+ * and validates the declared sources and owns nothing about their shape; `T` is
+ * the consumer's, and so is `config`.
+ */
+export type LandingPageDataConfig<T> = {
+  sources: LandingPageDataSources<T>;
+  config: (data: T) => LandingPageConfig;
+};
+
+/**
+ * Declares a site composed from validated build-time JSON. Selected over the
+ * root `LandingPageData` model when a source map and an adapter module both
+ * exist, because such an adapter is itself that data's consumer.
+ */
+export function defineLandingPageData<T>(
+  sources: LandingPageDataSources<T>,
+  config: (data: T) => LandingPageConfig,
+): LandingPageDataConfig<T> {
+  const ids = Object.values(sources) as LandingPageDataSource<unknown>[];
+  if (ids.length === 0)
+    throw new Error("LandingPageDataConfig must declare at least one source.");
+  for (const source of ids)
+    if (
+      typeof source?.id !== "string" ||
+      typeof source?.validate !== "function"
+    )
+      throw new Error(
+        "Every LandingPageDataConfig source needs a string 'id' and a 'validate' function.",
+      );
+  return { sources, config };
+}
 
 /** Declares a consumer-owned site without exposing a Vite configuration. */
 export function defineLandingPage(

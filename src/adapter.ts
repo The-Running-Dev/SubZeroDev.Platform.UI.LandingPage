@@ -3,7 +3,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build as viteBuild, createServer } from "vite";
 import { tsImport } from "tsx/esm/api";
-import type { LandingPageConfig } from "./index.js";
+import type { LandingPageConfig, LandingPageDataConfig } from "./index.js";
 import type { SourceMap } from "subzerodev-data-json";
 import { assertRoute, isBodyRoute } from "./route.js";
 
@@ -16,21 +16,54 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function loadAdapter(path: string): Promise<LandingPageConfig> {
+type AdapterExport = LandingPageConfig | LandingPageDataConfig<unknown>;
+
+/**
+ * A data-backed adapter is recognised structurally rather than by a marker
+ * field, so a configuration written as a plain object literal — with no import
+ * of this package — is detected exactly as one built by `defineLandingPageData`.
+ */
+export function isDataBacked(
+  value: AdapterExport,
+): value is LandingPageDataConfig<unknown> {
+  const candidate = value as Partial<LandingPageDataConfig<unknown>>;
+  return (
+    typeof candidate.config === "function" &&
+    typeof candidate.sources === "object" &&
+    candidate.sources !== null
+  );
+}
+
+/** Loads the adapter module's default export in either of its two forms. */
+export async function loadAdapterExport(path: string): Promise<AdapterExport> {
   const value = (await tsImport(pathToFileURL(path).href, import.meta.url)) as {
-    default?: LandingPageConfig | { default?: LandingPageConfig };
+    default?: AdapterExport | { default?: AdapterExport };
   };
-  const candidate =
+  const candidate = (
     value.default && "default" in value.default
       ? value.default.default
-      : value.default;
-  if (!candidate || !Array.isArray((candidate as LandingPageConfig).routes))
+      : value.default
+  ) as AdapterExport | undefined;
+  if (!candidate)
     throw new Error(
-      `Adapter '${path}' must have a default export from defineLandingPage().`,
+      `Adapter '${path}' must have a default export from defineLandingPage() or defineLandingPageData().`,
     );
-  const config = candidate as LandingPageConfig;
-  for (const route of config.routes) assertRoute(route);
-  return config;
+  if (isDataBacked(candidate)) return candidate;
+  if (!Array.isArray((candidate as LandingPageConfig).routes))
+    throw new Error(
+      `Adapter '${path}' must have a default export from defineLandingPage() or defineLandingPageData().`,
+    );
+  return candidate;
+}
+
+async function loadAdapter(path: string): Promise<LandingPageConfig> {
+  const candidate = await loadAdapterExport(path);
+  if (isDataBacked(candidate))
+    throw new Error(
+      `Adapter '${path}' declares build-time data sources, which need a JSON source map.`,
+    );
+  for (const route of candidate.routes) assertRoute(route);
+  return candidate;
 }
 
 function outputEntry(path: string): string {

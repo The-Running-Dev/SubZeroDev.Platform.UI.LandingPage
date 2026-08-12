@@ -17,6 +17,10 @@ optional `site/theme.css`, and optional `site/public/`. The build writes
 
 ## JSON site data
 
+> Requires `subzerodev-platform-ui-landing-page@0.4.0`. The quick start above
+> installs `0.3.0`, the current release; everything in this section and the next
+> arrives with `0.4.0` and is not available before it.
+
 When `site/sources.public.yml` exists, the builder reads the `landing-page`
 source through `subzerodev-data-json@0.2.0`. Pass `--source-map` and
 `--source-id` to select another map or source. The selected root source must
@@ -34,6 +38,45 @@ routes remain static and make no runtime data request.
 
 See [JSON-backed site data](docs/json-site-data.md) for a complete generic-site
 example, an entry-route runtime-data example, and the validation rules.
+
+## Routes composed from build-time data
+
+Where a site composes its own markup from structured content, the adapter module
+can declare the sources it needs and receive them validated and typed, instead of
+serialising finished HTML into a JSON model:
+
+```ts
+import {
+  defineLandingPage,
+  defineLandingPageData,
+} from "subzerodev-platform-ui-landing-page";
+
+type Content = { projects: Project[] };
+
+export default defineLandingPageData<Content>(
+  { projects: { id: "projects", validate: validateProjects } },
+  ({ projects }) =>
+    defineLandingPage({
+      routes: [
+        {
+          path: "/",
+          body: renderProjects(projects),
+          metadata: { title: "Projects", description: "What exists so far." },
+        },
+      ],
+    }),
+);
+```
+
+Each source names an id declared in `site/sources.public.yml` and the validator
+that gives it a type. The validator is required: `T` is a claim about JSON this
+package never authored, so an unchecked cast would make the type a lie. A
+payload that fails ends the build before composition runs.
+
+When both a source map and an adapter module exist, an adapter declaring sources
+takes precedence over the root `LandingPageData` model, because it is that data's
+consumer. An adapter declaring none is unaffected and the root model is used, so
+adding this changes no existing build.
 
 ## Custom adapter
 

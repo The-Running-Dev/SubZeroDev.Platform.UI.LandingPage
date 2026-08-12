@@ -128,6 +128,10 @@ An adapter model carries the same route shape as `defineLandingPage`. `entry`
 paths are relative to the directory containing `sources.public.yml`; `publicDir`
 and `allow` are relative to the repository root.
 
+The entry module is yours to write — the example below names `src/main.ts`
+relative to `site/`, so create `site/src/main.ts` before building. `publicDir` is
+optional and skipped when the directory does not exist.
+
 ```yaml
 # site/sources.public.yml
 version: 1
@@ -188,7 +192,11 @@ loader from the public map:
 import { createJsonLoader, type SourceMap } from "subzerodev-data-json";
 
 const element = document.querySelector<HTMLScriptElement>("#szd-json-sources");
-const sources = JSON.parse(element?.textContent ?? "") as SourceMap;
+// Absent on generic and body routes by contract, and on an entry route that
+// declared no `dataSourceIds` — check rather than letting JSON.parse("") throw.
+if (!element?.textContent)
+  throw new Error("No #szd-json-sources on this route.");
+const sources = JSON.parse(element.textContent) as SourceMap;
 const loader = createJsonLoader(sources, {
   fetch,
   schedule(ms) {
@@ -209,9 +217,12 @@ const status = await loader.loadById("status");
 
 - `site/sources.public.yml` takes precedence over `site/landing.config.ts` and
   legacy Markdown. Supply `--source-map` or `--source-id` to select another
-  map or root source.
-- A declared map, source, or model that cannot load or validate fails the build;
-  it never falls back.
+  map or root source. The one exception is an adapter module declaring its own
+  build-time sources through `defineLandingPageData`: it is that data's
+  consumer, so it outranks the root model. An adapter declaring none does not.
+- A declared map, source, or model that cannot load or validate fails the build.
+  It falls back only where `--fallback-source-id` names a replacement and the
+  root model is the single source that failed.
 - Models are strict: unknown fields, unsupported versions, invalid or duplicate
   paths, malformed metadata, and both/neither `entry` and `body` are errors.
 - Public source maps cannot declare headers. Runtime filesystem sources are

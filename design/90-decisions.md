@@ -1,5 +1,33 @@
 # Decisions
 
+### 2026-08-13 — The adapter seam accepts build-time data, typed by the consumer
+
+Context: the entry earlier the same day rejected build-time data injection on the
+grounds that the adapter module can already call Data.Json directly, so the seam
+"buys nothing it does not have". That reasoning was incomplete. What the adapter
+module can do directly is construct `nodePorts()`, call `prefetch`, build a
+loader and hold a temporary directory — build plumbing this package already owns
+and already performs for the root model. Every consumer composing from content
+would write that twice. The `Interface<T>` framing is what made the omission
+visible: `Validator<T>` is the seam that keeps the package ignorant of shape, and
+it is already in Data.Json's vocabulary, so exposing it costs no new concept.
+Chosen: `defineLandingPageData(sources, config)`. `sources` names one id and one
+`Validator` per key of the consumer's `T`; `config` receives the resolved `T`.
+The package resolves and validates; `T` and `config` are the consumer's. The
+validator is required, because an optional one would make `T` an unchecked cast
+over JSON this package never authored. Precedence is additive: a data-declaring
+adapter outranks the root model, an adapter declaring none behaves exactly as
+before.
+Rejected: **an optional validator with a bare `T` cast** — it is the same lie
+`projects` avoids in SubZeroDev.com by routing through `validateInventory`.
+**A marker field on the returned object** — structural detection recognises a
+plain object literal identically, so a configuration need not import this package
+to be data-backed, which is what keeps the adapter tests free of a package
+resolution step. **Changing precedence so any adapter outranks the root model**
+— it would alter the build of a consumer holding both files today.
+Reversibility: moderate. The export is additive during `0.x`; withdrawing it
+after a consumer adopts it needs a breaking release.
+
 ### 2026-08-13 — A failed root model may fall back to a declared source, opt-in and loudly
 
 Context: Docs-Template resolves each content document from a bundled default or
