@@ -205,3 +205,30 @@ Rejected: a floating npm range or action branch — either can change under a
 consumer without review; a Git submodule — preserves duplicated integration
 ownership.
 Reversibility: moderate; a correction requires a new immutable `0.x` release.
+
+### 2026-08-13 — `AGENTS.md` merged with the kit contract, project identity kept verbatim
+
+Context: `/install` found `AGENTS.md` unchanged since the repository's first
+commit (`d2625b7`) — a 20-line project-identity note with no kit sections
+(Source of truth, Model/effort, Command routing, Session boundaries, Hard
+rules, Single ownership, Verification, Working with me, Git and delivery,
+Tracking work, Decision logging, House conventions), even though
+`.claude/commands/*`, `tools/*.ps1`, and `design/` were already installed and
+in active use. `CLAUDE.md` was already the correct pointer form, so only the
+content side needed the merge.
+Chosen: keep the target's project-identity paragraph as a new `## Project
+identity` section directly under the title, append every kit section
+unchanged below it. Two target rules restated the same thing as a kit rule:
+"Stage named paths only" folded into Git and delivery's existing "Stage
+explicitly, by named path" (kit's fuller wording kept, including "add a
+follow-up commit" for the force-push case, which the target's phrasing
+lacked); "Every validator needs a positive and a negative test" kept in
+Project identity in the target's own words, dropped from Verification's
+overlapping "A schema or validator change is not done until it has rejected
+something" bullet.
+Rejected: leaving `AGENTS.md` as the 20-line file — the repository's commands
+already assume concepts (model tiers, session boundaries, the design freeze)
+that were nowhere written down; replacing the target's content wholesale with
+the kit's `AGENTS.md` — the project-identity paragraph and its two house
+rules are real, repository-specific content with no kit equivalent.
+Reversibility: cheap — a documentation file, not a public interface.
