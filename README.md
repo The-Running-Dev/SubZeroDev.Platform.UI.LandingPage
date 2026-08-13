@@ -7,7 +7,7 @@ Pages deployment path.
 ## Quick start
 
 ```powershell
-npm install --save-dev subzerodev-platform-ui-landing-page@0.3.0
+npm install --save-dev subzerodev-platform-ui-landing-page@0.4.1
 subzerodev-platform-ui-landing-page build
 ```
 
@@ -17,9 +17,11 @@ optional `site/theme.css`, and optional `site/public/`. The build writes
 
 ## JSON site data
 
-> Requires `subzerodev-platform-ui-landing-page@0.4.0`. The quick start above
-> installs `0.3.0`, the current release; everything in this section and the next
-> arrives with `0.4.0` and is not available before it.
+> Requires `subzerodev-platform-ui-landing-page@0.4.1`, which the quick start
+> above installs. Nothing in this section or the next exists in `0.3.0`. Use
+> `0.4.1` rather than `0.4.0`: that release reported only the first failing
+> declared source, so correcting a malformed input revealed the next one instead
+> of all of them.
 
 When `site/sources.public.yml` exists, the builder reads the `landing-page`
 source through `subzerodev-data-json@0.2.0`. Pass `--source-map` and

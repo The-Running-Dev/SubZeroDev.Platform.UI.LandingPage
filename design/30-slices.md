@@ -43,7 +43,7 @@ package version exactly.
 
 ## UI4 — JSON-backed landing data
 
-**Status:** implementation complete; validator tests partial; release pending
+**Status:** implementation complete; validator tests complete; release pending
 
 Delivers a versioned JSON site model through `subzerodev-data-json`, preferred
 when a public source map exists and falling back to the current TypeScript
