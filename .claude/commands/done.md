@@ -42,14 +42,18 @@ tools/Invoke-DoneHousekeeping.ps1 -RepoRoot <repo> -SkipPull -DeleteBranches <br
 
 A branch is deleted without a chat confirmation only if **both** named gates pass. Uncertainty on either one counts as failure — it moves the branch out of the automatic path, not into it:
 
-| Gate           | What it checks                                                                     | Failure means                                                                                                                                    |
-| -------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Merged**     | `git branch --merged <default>` lists the branch (`$mergedBranches` in the script) | Not a candidate at all — `gh pr list` showing it merged (e.g. by squash) does not satisfy this gate; report and ask separately                   |
-| **SafeDelete** | `git branch -d` (never `-D`) exits 0                                               | The branch is a confirmed candidate but git itself refuses the delete (typically unmerged-relative-to-upstream in a way `--merged` didn't catch) |
+| Gate           | What it checks                                                                                      | Failure means                                                                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Merged**     | `git for-each-ref --merged <default> refs/heads` lists the branch (`$mergedBranches` in the script)   | Not a candidate at all — `gh pr list` showing it merged (e.g. by squash) does not satisfy this gate; report and ask separately                   |
+| **SafeDelete** | `git branch -d` (never `-D`) exits 0                                                                  | The branch is a confirmed candidate but git itself refuses the delete                                                                            |
 
 Proceed straight to the delete call; do not stop and wait for a chat confirmation first — the candidate list itself is the authorization, since every entry on it independently passed **Merged**. A name that is not in `--merged`'s list fails **Merged** and is refused, not deleted, even if you pass it.
 
-**When a gate fails, name it.** The script's `Refused` entries already carry the failing reason (`$refused` in the script) — report each one as `<branch>: failed <gate name> — <Reason text>`, not just "left alone" or "delegation didn't apply". A **SafeDelete** failure is outside this carve-out — report it and ask separately, one at a time, before ever running `-D` on that branch. Never escalate to a force delete without that separate ask.
+**When a gate fails, name it.** Each `Refused` entry (`$refused` in the script) carries a short `Reason` code plus a human `Detail` — report each one as `<branch>: failed <gate name> — <Detail>`, not just "left alone" or "delegation didn't apply". The gate a `Reason` failed is fixed: `NotMerged` is **Merged**; `CheckedOutInWorktree` and `DeleteFailed` are both **SafeDelete**.
+
+- **`NotMerged`** — not in `--merged`'s list. Report and ask separately, same as any other **Merged** failure.
+- **`CheckedOutInWorktree`** — `git branch -d` refused because the branch is checked out in a different worktree (`Detail` names its path). The remedy is `git worktree remove <path>`, **never** a force delete — that worktree may hold uncommitted work of its own, so removing it is itself a destructive action that needs a separate ask before you run it, exactly like any other **Explicit permission required** action in `AGENTS.md`.
+- **`DeleteFailed`** — `git branch -d` refused for any other reason (typically unmerged-relative-to-upstream in a way `--merged` didn't catch). Report and ask separately, one at a time, before ever running `-D` on that branch. Never escalate to a force delete without that separate ask.
 
 ## Report
 
