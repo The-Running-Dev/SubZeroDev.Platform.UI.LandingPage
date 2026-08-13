@@ -1,7 +1,7 @@
 # Agent — lessons learned
 
 Retrospective notes for whoever (human or agent) works this repo next. Standing
-*instructions* live in [`AGENTS.md`](AGENTS.md); *decisions* live in
+_instructions_ live in [`AGENTS.md`](AGENTS.md); _decisions_ live in
 `design/90-decisions.md`. This file is what was learned the hard way.
 
 Keep it short — it loads into context, so length is a recurring cost. **Add a lesson only
@@ -109,7 +109,7 @@ and preferences belong in `AGENTS.md`.
 
 - **Name things after structure, not flavour.** A kind was nearly named for its genre, which
   would have licensed a new one per theme. Theme words smuggle in decisions.
-- **When a document starts describing how something *works* rather than what it *contains*,
+- **When a document starts describing how something _works_ rather than what it _contains_,
   stop and check the contract it depends on.** An eight-document draft accidentally wrote a
   parallel engine — its own state envelope, its own API, its own status union. Six of its
   eight operations already existed upstream under different names. Every individual
