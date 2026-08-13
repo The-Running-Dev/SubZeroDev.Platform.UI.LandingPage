@@ -80,12 +80,14 @@ type; declaring no source is an error, as is an entry without a string `id` and
 a `validate` function. `config` receives the resolved `T` and returns a
 `LandingPageConfig`.
 
-Every declared id must exist in the public source map. Each source resolves
-through its own validator, and a payload that fails ends the build before
-`config` runs. The package owns resolution and validation timing; it owns
-nothing about `T`, which is the consumer's, as is `config`. The validator is
-required rather than optional: an unchecked cast would make `T` a claim the
-package cannot support about JSON it never authored.
+Every declared id must exist in the public source map and declare `at: build`.
+Each source resolves through its own validator. Missing ids, non-build sources,
+resolution failures and validator failures are collected in declaration order,
+with each diagnostic naming the adapter key and source id. Any failure ends the
+build before `config` runs. The package owns resolution and validation timing;
+it owns nothing about `T`, which is the consumer's, as is `config`. The
+validator is required rather than optional: an unchecked cast would make `T` a
+claim the package cannot support about JSON it never authored.
 
 When a source map and an adapter module both exist, an adapter that declares
 sources is selected over the root `LandingPageData` model, because such an

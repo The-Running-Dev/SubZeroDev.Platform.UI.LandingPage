@@ -36,7 +36,8 @@ export function isDataBacked(
 
 /** Loads the adapter module's default export in either of its two forms. */
 export async function loadAdapterExport(path: string): Promise<AdapterExport> {
-  const value = (await tsImport(pathToFileURL(path).href, import.meta.url)) as {
+  const adapterUrl = pathToFileURL(path).href;
+  const value = (await tsImport(adapterUrl, adapterUrl)) as {
     default?: AdapterExport | { default?: AdapterExport };
   };
   const candidate = (
