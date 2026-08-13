@@ -71,7 +71,9 @@ export default defineLandingPageData<Content>(
 Each source names an id declared in `site/sources.public.yml` and the validator
 that gives it a type. The validator is required: `T` is a claim about JSON this
 package never authored, so an unchecked cast would make the type a lie. A
-payload that fails ends the build before composition runs.
+payload that fails ends the build before composition runs. Every declared
+source must resolve at build time; failures are reported together in declaration
+order, so one correction cycle can address every malformed input.
 
 When both a source map and an adapter module exist, an adapter declaring sources
 takes precedence over the root `LandingPageData` model, because it is that data's

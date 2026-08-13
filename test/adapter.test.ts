@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildAdapter } from "../src/adapter.js";
+import { buildAdapter, buildAdapterConfig } from "../src/adapter.js";
 
 const roots: string[] = [];
 
@@ -193,5 +193,56 @@ describe("custom adapter", () => {
     await expect(
       buildAdapter(root, "site/landing.config.ts", join(site, "dist")),
     ).rejects.toThrow("belongs to a body route");
+  });
+
+  it("rejects unknown and runtime-file data sources before emitting an entry route", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(join(site, "src", "main.ts"), "export {};", "utf8");
+    const config = {
+      routes: [
+        {
+          path: "/",
+          entry: "src/main.ts",
+          dataSourceIds: ["missing", "runtime-file"],
+          metadata: { title: "Home", description: "Home page" },
+        },
+      ],
+    };
+    await expect(
+      buildAdapterConfig(root, site, config, join(site, "dist"), {
+        version: 1,
+        sources: {
+          "runtime-file": {
+            at: "runtime",
+            path: "site/runtime.json",
+            cache: "manual",
+          },
+        },
+      }),
+    ).rejects.toThrow("declares unknown data source 'missing'");
+    await expect(
+      buildAdapterConfig(
+        root,
+        site,
+        {
+          ...config,
+          routes: [{ ...config.routes[0], dataSourceIds: ["runtime-file"] }],
+        },
+        join(site, "dist"),
+        {
+          version: 1,
+          sources: {
+            "runtime-file": {
+              at: "runtime",
+              path: "site/runtime.json",
+              cache: "manual",
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow("declares runtime file source 'runtime-file'");
   });
 });

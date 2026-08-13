@@ -223,6 +223,9 @@ const status = await loader.loadById("status");
 - A declared map, source, or model that cannot load or validate fails the build.
   It falls back only where `--fallback-source-id` names a replacement and the
   root model is the single source that failed.
+- Sources declared through `defineLandingPageData` must use `at: build`. Missing,
+  non-build, resolution, and validation failures are collected in the adapter's
+  declaration order; route composition is never invoked after any failure.
 - Models are strict: unknown fields, unsupported versions, invalid or duplicate
   paths, malformed metadata, and both/neither `entry` and `body` are errors.
 - Public source maps cannot declare headers. Runtime filesystem sources are

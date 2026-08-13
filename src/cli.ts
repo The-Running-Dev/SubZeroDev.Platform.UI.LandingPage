@@ -216,28 +216,59 @@ async function buildAdapterData(
   validatePublicSources(map);
   const temporary = await mkdtemp(join(tmpdir(), "szd-landing-data-"));
   try {
-    const prefetched = await prefetch(map, temporary, nodePorts());
-    const loader = createJsonLoader(prefetched.runtimeMap, nodePorts());
     const entries = Object.entries(declaration.sources) as [
       string,
       { id: string; validate: (raw: unknown) => unknown },
     ][];
-    const data: Record<string, unknown> = {};
-    for (const [key, source] of entries) {
-      if (!map.sources[source.id])
-        throw new Error(
+    const failures: string[] = [];
+    const declaredEntries = entries.filter(([key, source]) => {
+      const mapSource = map.sources[source.id];
+      if (!mapSource) {
+        failures.push(
           `Adapter source '${key}' names JSON source '${source.id}', which is not declared in '${sourceMapPath}'.`,
         );
+        return false;
+      }
+      if (mapSource.at !== "build") {
+        failures.push(
+          `Adapter source '${key}' ('${source.id}') must declare at: build.`,
+        );
+        return false;
+      }
+      return true;
+    });
+
+    let prefetched: PrefetchOutput;
+    try {
+      prefetched = await prefetch(map, temporary, nodePorts());
+    } catch (error) {
+      if (error instanceof JsonError && error.code === "build.failed") {
+        for (const [key, source] of declaredEntries) {
+          const failure = error.failures.find((item) => item.id === source.id);
+          if (failure)
+            failures.push(
+              `Adapter source '${key}' ('${source.id}') failed: ${failure.message}`,
+            );
+        }
+      }
+      if (failures.length > 0) throw new Error(failures.join("\n"));
+      throw error;
+    }
+
+    const loader = createJsonLoader(prefetched.runtimeMap, nodePorts());
+    const data: Record<string, unknown> = {};
+    for (const [key, source] of declaredEntries) {
       const result = await loader.load({
         id: source.id,
         validate: source.validate as never,
       });
       if (!result.ok)
-        throw new Error(
+        failures.push(
           `Adapter source '${key}' ('${source.id}') failed: ${result.message}`,
         );
-      data[key] = result.data;
+      else data[key] = result.data;
     }
+    if (failures.length > 0) throw new Error(failures.join("\n"));
     const config = declaration.config(data);
     for (const route of config.routes) assertRoute(route);
     assertUniquePaths(config.routes);

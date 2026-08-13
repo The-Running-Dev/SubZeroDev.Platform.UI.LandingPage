@@ -170,4 +170,92 @@ describe("LandingPageData", () => {
       }),
     ).toThrow("Duplicate route path '/'");
   });
+
+  it.each([
+    [
+      "an unsupported version",
+      {
+        version: 2,
+        kind: "generic",
+        home: { markdown: "# Home" },
+        changelog: { markdown: "# Changes" },
+      },
+      "version must be 1",
+    ],
+    [
+      "an unknown kind",
+      {
+        version: 1,
+        kind: "unknown",
+        home: { markdown: "# Home" },
+        changelog: { markdown: "# Changes" },
+      },
+      "kind must be 'generic' or 'adapter'",
+    ],
+    [
+      "malformed markdown",
+      {
+        version: 1,
+        kind: "generic",
+        home: { markdown: 1 },
+        changelog: { markdown: "# Changes" },
+      },
+      "generic.home.markdown must be a string",
+    ],
+    [
+      "malformed metadata",
+      {
+        version: 1,
+        kind: "adapter",
+        routes: [
+          { path: "/", body: "<main>Home</main>", metadata: { title: "Home" } },
+        ],
+      },
+      "requires string title and description",
+    ],
+    [
+      "an invalid icon relation",
+      {
+        version: 1,
+        kind: "adapter",
+        routes: [
+          {
+            path: "/",
+            body: "<main>Home</main>",
+            metadata: {
+              ...metadata,
+              icons: [{ rel: "shortcut", href: "/favicon.ico" }],
+            },
+          },
+        ],
+      },
+      "icons[0].rel is invalid",
+    ],
+    [
+      "a non-numeric Open Graph dimension",
+      {
+        version: 1,
+        kind: "adapter",
+        routes: [
+          {
+            path: "/",
+            body: "<main>Home</main>",
+            metadata: {
+              ...metadata,
+              openGraph: {
+                title: "Home",
+                description: "Home page",
+                type: "website",
+                url: "https://example.test/",
+                imageWidth: "wide",
+              },
+            },
+          },
+        ],
+      },
+      "openGraph.imageWidth must be a number",
+    ],
+  ])("rejects %s", (_label, value, message) => {
+    expect(() => validateLandingPageData(value)).toThrow(message);
+  });
 });

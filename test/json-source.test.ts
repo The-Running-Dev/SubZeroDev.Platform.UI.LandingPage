@@ -229,6 +229,41 @@ describe("JSON source resolution", () => {
     await expect(build(root)).rejects.toThrow(/expected an items array/);
   }, 60000);
 
+  it("reports every declared adapter-source failure before invoking composition", async () => {
+    const root = await fixture(
+      "version: 1\nsources:\n  projects:\n    at: build\n    path: site/projects.json\n    cache: manual\n  testimonials:\n    at: build\n    path: site/testimonials.json\n    cache: manual\n",
+    );
+    await writeFile(
+      join(root, "site", "projects.json"),
+      JSON.stringify({}),
+      "utf8",
+    );
+    await writeFile(
+      join(root, "site", "testimonials.json"),
+      JSON.stringify({}),
+      "utf8",
+    );
+    await writeFile(
+      join(root, "site", "landing.config.ts"),
+      `export default {
+         sources: {
+           projects: { id: "projects", validate: () => ({ ok: false as const, message: "projects invalid" }) },
+           testimonials: { id: "testimonials", validate: () => ({ ok: false as const, message: "testimonials invalid" }) },
+         },
+         config: () => { throw new Error("composition invoked"); },
+       };`,
+      "utf8",
+    );
+
+    await expect(build(root)).rejects.toThrow(
+      /projects invalid[\s\S]*testimonials invalid/,
+    );
+    await expect(build(root)).rejects.not.toThrow(/composition invoked/);
+    await expect(
+      readFile(join(root, "site", "dist", "index.html"), "utf8"),
+    ).rejects.toThrow();
+  }, 60000);
+
   it("rejects an adapter source naming an id the map does not declare", async () => {
     const root = await fixture(
       "version: 1\nsources:\n  projects:\n    at: build\n    path: site/projects.json\n    cache: manual\n",
@@ -247,6 +282,21 @@ describe("JSON source resolution", () => {
       "utf8",
     );
     await expect(build(root)).rejects.toThrow(/is not declared/);
+  }, 60000);
+
+  it("rejects an adapter source that is not resolved at build time", async () => {
+    const root = await fixture(
+      "version: 1\nsources:\n  projects:\n    at: runtime\n    url: https://example.test/projects.json\n    cache: manual\n",
+    );
+    await writeFile(
+      join(root, "site", "landing.config.ts"),
+      `export default {
+         sources: { projects: { id: "projects", validate: (raw: unknown) => ({ ok: true as const, value: raw }) } },
+         config: () => ({ routes: [] }),
+       };`,
+      "utf8",
+    );
+    await expect(build(root)).rejects.toThrow(/must declare at: build/);
   }, 60000);
 
   it("leaves an adapter declaring no sources on the root-model path", async () => {
