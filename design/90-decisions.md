@@ -1,5 +1,29 @@
 # Decisions
 
+### 2026-08-15 — `styles` is specified as ordered site-wide links, and a missing file fails the build
+
+Context: the entry below chose to specify `LandingPageConfig.styles` rather than
+withdraw it, and left the amendment to `/contract`. Writing it forced three
+questions that entry did not answer: whether the JSON `kind: "adapter"` model
+carries the field, where the links sit relative to a body route's `stylesheet`,
+and what becomes of a declared path that cannot be read.
+Chosen: carry `styles` on `AdapterLandingPageData` too, so a TypeScript adapter,
+a JSON model and a `defineLandingPageData` site express it identically; emit the
+links in declaration order, ahead of the `<style>` the head already places last,
+so a route's own CSS overrides site-wide rules; and end the build on an
+unreadable path.
+Rejected: **the TypeScript config only** — it leaves a JSON-backed site with no
+site-wide stylesheet at all, a capability gap that has to be explained rather
+than read. **Emitting the links after a route's `stylesheet`** — a site-wide
+file would silently override the route that declared its own CSS, inverting the
+specificity a consumer expects from the narrower declaration. **Dropping an
+unreadable path with a warning** — a site that builds and serves unstyled is the
+silent failure the declared-source rules already reject, and that argument does
+not weaken because the value is CSS rather than content.
+Reversibility: expensive, as the entry it completes already recorded.
+Specifying a public field is additive during `0.x`; withdrawing it after a
+consumer adopts it needs a breaking release.
+
 ### 2026-08-15 — The document's invariants are enforced where the document is written
 
 Context: `/reconcile` found two halves of one gap. The contract states that every
