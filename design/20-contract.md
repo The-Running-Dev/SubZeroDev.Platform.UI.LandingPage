@@ -5,7 +5,8 @@ The public executable is `subzerodev-platform-ui-landing-page`. It exports
 `LandingPageEntryRoute`, `LandingPageBodyRoute`, `LandingPageMetadata`,
 `LandingPageOpenGraphMetadata`, `LandingPageTwitterMetadata`,
 `LandingPageIcon`, `defineLandingPageData`, `LandingPageDataConfig`,
-`LandingPageDataSource`, and `LandingPageDataSources`. Generic selectors start
+`LandingPageDataSource`, `LandingPageDataSources`, and
+`validateLandingPageData`. Generic selectors start
 `szd-`; generic tokens start
 `--szd-`. CLI input and error behavior is specified in the repository README.
 
