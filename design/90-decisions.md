@@ -1,5 +1,25 @@
 # Decisions
 
+### 2026-08-15 — `LandingPageMetadata.repositoryUrl` is withdrawn
+
+Context: `/contract` found a third public field read by nothing. It is typed on
+route metadata and validated by the JSON model, and no code consumes it; the
+generic shell's repository link comes from `GenericLandingPageData`'s separate
+field of the same name, and the custom-adapter head never reads route metadata's
+copy. The contract's static-head section never listed it, so it is unspecified
+as well as unused.
+Chosen: remove the field and its validation, as `hydrate` was removed the same
+day and for the same reason — a validated no-op invites a consumer to set it and
+believe the document changed. The contract needs no amendment, having never
+claimed it.
+Rejected: **specifying and emitting it** as a per-route repository link — the
+head has no established `rel` for one, and the generic shell already expresses
+the idea as a nav link, so the two forms would diverge on a field neither
+consumer asked for. **Recording it as reserved-with-no-effect** — the cheapest
+edit today, and it leaves a public interface with no specification, which the
+hard rules forbid and the next reconciliation finds again.
+Reversibility: cheap. Re-adding an optional field is additive during `0.x`.
+
 ### 2026-08-15 — `styles` is specified as ordered site-wide links, and a missing file fails the build
 
 Context: the entry below chose to specify `LandingPageConfig.styles` rather than
