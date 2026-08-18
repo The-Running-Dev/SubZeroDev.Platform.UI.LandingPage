@@ -3,12 +3,12 @@
     {
       "name": "npm run format:check",
       "status": "Passed",
-      "detail": "prettier --check . — All matched files use Prettier code style! (After running prettier --write on .claude/gates.json and this branch's own diff.)"
+      "detail": "prettier --check . — All matched files use Prettier code style!"
     },
     {
       "name": "npm run lint",
       "status": "DidNotRun",
-      "reason": "eslint . fails with 88 'No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present' parsing errors, naming this repo root and .claude/worktrees/inspiring-jemison-f70809 as the two candidates. That worktree is a stale, unrelated checkout left under .claude/worktrees/ inside this same clone (detached HEAD at an older commit, its own tsconfig.json confusing typescript-eslint's project-service auto-detection). Confirmed pre-existing and unrelated to this branch's diff: stashing src/adapter.ts and test/adapter.test.ts and re-running lint reproduces the identical 88 errors. This is the same environmental collision recorded in .claude/verify-report.json for PR #28 (commit 8e05f59)."
+      "reason": "eslint . fails with 88 'No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present' parsing errors, naming this repo root and .claude/worktrees/inspiring-jemison-f70809 as the two candidates. That worktree is a stale, unrelated checkout left under .claude/worktrees/ inside this same clone (detached HEAD at an older commit). Confirmed pre-existing and unrelated to this branch: the same 88 errors reproduce identically regardless of this branch's diff. Same environmental collision recorded for PR #28 (commit 8e05f59) and for this branch before the merge (PR #30) and for PR #31."
     },
     {
       "name": "npm run typecheck",
@@ -23,7 +23,7 @@
     {
       "name": "npm test",
       "status": "Passed",
-      "detail": "vitest run — Test Files 18 passed (18), Tests 139 passed (139), including the new regression test 'serves a config-based adapter's routes over the dev server, reloading the config on each request (#10)'. Verified as a real regression test by reverting src/adapter.ts and confirming that test fails with 'Cannot read properties of undefined (reading close)' (the dev server never started serving)."
+      "detail": "vitest run — Test Files 18 passed (18), Tests 139 passed (139), including the regression test 'serves a config-based adapter's routes over the dev server, reloading the config on each request (#10)'."
     },
     {
       "name": "npm run pack:check",
@@ -37,5 +37,5 @@
     }
   ],
   "discoveredCiGates": [],
-  "discoveryNote": "No .github/workflows/*.yml step in this repository carries a '# verification: true' comment, so zero CI-flagged gates were discovered by the documented convention. .github/workflows/pages.yml and .github/workflows/deploy-pages.yml are both deploy workflows with no flagged verify step. All entries above are this repository's optional, non-CI-gated package.json scripts (npm run check's constituents, run individually for per-gate detail) plus git diff --check."
+  "discoveryNote": "No .github/workflows/*.yml step in this repository carries a '# verification: true' comment, so zero CI-flagged gates were discovered. All entries above are this repository's optional, non-CI-gated npm run check constituents plus git diff --check. Re-verified after merging origin/main (which brought in PR #31's contract amendment) into this branch to resolve a merge conflict confined to this file."
 }
