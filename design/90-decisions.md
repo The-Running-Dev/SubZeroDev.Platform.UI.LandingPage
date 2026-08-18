@@ -1,5 +1,133 @@
 # Decisions
 
+### 2026-08-15 — `LandingPageMetadata.repositoryUrl` is withdrawn
+
+Context: `/contract` found a third public field read by nothing. It is typed on
+route metadata and validated by the JSON model, and no code consumes it; the
+generic shell's repository link comes from `GenericLandingPageData`'s separate
+field of the same name, and the custom-adapter head never reads route metadata's
+copy. The contract's static-head section never listed it, so it is unspecified
+as well as unused.
+Chosen: remove the field and its validation, as `hydrate` was removed the same
+day and for the same reason — a validated no-op invites a consumer to set it and
+believe the document changed. The contract needs no amendment, having never
+claimed it.
+Rejected: **specifying and emitting it** as a per-route repository link — the
+head has no established `rel` for one, and the generic shell already expresses
+the idea as a nav link, so the two forms would diverge on a field neither
+consumer asked for. **Recording it as reserved-with-no-effect** — the cheapest
+edit today, and it leaves a public interface with no specification, which the
+hard rules forbid and the next reconciliation finds again.
+Reversibility: cheap. Re-adding an optional field is additive during `0.x`.
+
+### 2026-08-15 — `styles` is specified as ordered site-wide links, and a missing file fails the build
+
+Context: the entry below chose to specify `LandingPageConfig.styles` rather than
+withdraw it, and left the amendment to `/contract`. Writing it forced three
+questions that entry did not answer: whether the JSON `kind: "adapter"` model
+carries the field, where the links sit relative to a body route's `stylesheet`,
+and what becomes of a declared path that cannot be read.
+Chosen: carry `styles` on `AdapterLandingPageData` too, so a TypeScript adapter,
+a JSON model and a `defineLandingPageData` site express it identically; emit the
+links in declaration order, ahead of the `<style>` the head already places last,
+so a route's own CSS overrides site-wide rules; and end the build on an
+unreadable path.
+Rejected: **the TypeScript config only** — it leaves a JSON-backed site with no
+site-wide stylesheet at all, a capability gap that has to be explained rather
+than read. **Emitting the links after a route's `stylesheet`** — a site-wide
+file would silently override the route that declared its own CSS, inverting the
+specificity a consumer expects from the narrower declaration. **Dropping an
+unreadable path with a warning** — a site that builds and serves unstyled is the
+silent failure the declared-source rules already reject, and that argument does
+not weaken because the value is CSS rather than content.
+Reversibility: expensive, as the entry it completes already recorded.
+Specifying a public field is additive during `0.x`; withdrawing it after a
+consumer adopts it needs a breaking release.
+
+### 2026-08-15 — The document's invariants are enforced where the document is written
+
+Context: `/reconcile` found two halves of one gap. The contract states that every
+value the package interpolates into a document it owns is HTML-escaped and names
+exactly two verbatim exceptions, but a route's `entry` reached the module-script
+`src` unescaped beside attributes that were escaped — and `entry` is reachable
+from a JSON model the contract permits to arrive over HTTP. Separately,
+duplicate route paths were rejected by `defineLandingPage` and by the JSON model
+validator but not by the function that writes the entry documents, so an adapter
+object that reached the writer by another route silently produced one document
+where two were declared.
+Chosen: escape `entry` at its interpolation, and check path uniqueness in the
+writer beside the per-route path check already there. Both are idempotent for
+callers that already validate, so no valid consumer's output changes.
+Rejected: **validating `entry` against a path grammar as well** — it is a
+narrowing of a shipped public surface, and escaping already closes the document
+hole the contract is stated over; a grammar can be added later as its own
+narrowing release if a second reason appears. **Naming `entry` as a third
+verbatim value in the contract** — unlike `body` and `stylesheet` it is validated
+by nothing else, so the contract would be documenting an injection surface into a
+document whose whole promise is that it loads only what the package put there.
+**Leaving uniqueness to the two entry points the contract names** — that is the
+same asymmetry the 2026-08-13 route-path entry already ruled against, and a
+silently wrong build is the worst failure this package can produce.
+Reversibility: cheap. Both are single-expression changes with no contract effect.
+
+### 2026-08-15 — A composed adapter's entry routes may carry runtime sources
+
+Context: the contract promises that every entry route declaring `dataSourceIds`
+gets its filtered public map emitted inertly. The path that composes routes from
+build-time data did not pass the resolved runtime map to the document writer, so
+such a route failed with a message claiming no source map existed — while the map
+was open in the calling function. No test or document covered the combination.
+Chosen: pass the resolved runtime map through, exactly as the root-model path
+already does. One emission mechanism serves both adapter forms, and the contract
+becomes true rather than aspirational.
+Rejected: **narrowing the contract so a composed route may not declare
+`dataSourceIds`** — defensible, since a composed site already holds its data at
+build time, but it withdraws a shipped surface and still needs a code change to
+make the error message honest, so it is not the cheaper option it appears to be.
+**Filing it and deciding later** — the contract stays false in the meantime and
+the misleading message stays in front of the next consumer to try it.
+Reversibility: cheap. One argument at one call site.
+
+### 2026-08-15 — `styles` becomes site-wide stylesheet links rather than being withdrawn
+
+Context: `LandingPageConfig.styles` has been a public field since the first
+commit, consumed by nothing, absent from the contract and from this log. It is a
+public interface with no specification, which the hard rules forbid.
+Chosen: specify it as repository-relative CSS paths copied to the output and
+emitted as `<link rel="stylesheet">` in every route's head, entry and body alike.
+It is per-site rather than per-route, so it does not reopen the 2026-08-05
+decision, which rejected a second _per-route_ mechanism competing with an entry
+route's module graph. The contract amendment belongs to `/contract`; the
+implementation follows it.
+Rejected: **removing the field** — the cheaper and safer move, and the one
+recommended, but it forgoes a genuinely absent capability: a site-wide
+stylesheet has no expression today outside the generic shell's theme file.
+**Inline CSS strings instead of paths** — it would mirror a body route's
+`stylesheet` and keep CSS a string in the JSON model, but it forces every
+site-wide rule through the config file and forgoes the bundler's asset handling.
+**Body routes only** — the most conservative reading, rejected because a
+site-wide field applying to only some routes is a contract that has to be
+explained rather than read.
+Reversibility: expensive. Specifying and implementing a public field is additive
+during `0.x`, but withdrawing it after a consumer adopts it needs a breaking
+release — which removing it now would not have.
+
+### 2026-08-15 — `hydrate` is withdrawn rather than implemented
+
+Context: `LandingPageEntryRoute.hydrate` has been typed and validated since the
+first commit and read by nothing, while the README told consumers it was
+available for a server-rendered mount. A documented no-op is worse than an
+absent field: a consumer sets it and believes the page hydrates.
+Chosen: remove the field, its validation, and the README claim.
+Rejected: **specifying and implementing it** — the package has no prerendering
+step to produce the markup a hydrating mount would attach to, so this is a design
+question rather than a fix and would belong to `/design`, not to the correction
+of a false claim. **Keeping the field and correcting only the README** — it
+leaves a public field whose sole effect is to be validated, which is the shape
+this entry exists to remove.
+Reversibility: cheap. Re-adding an optional field is additive; the README claim
+is the part that had to go either way.
+
 ### 2026-08-13 — The adapter seam accepts build-time data, typed by the consumer
 
 Context: the entry earlier the same day rejected build-time data injection on the

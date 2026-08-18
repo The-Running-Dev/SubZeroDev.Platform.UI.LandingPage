@@ -5,7 +5,9 @@ The public executable is `subzerodev-platform-ui-landing-page`. It exports
 `LandingPageEntryRoute`, `LandingPageBodyRoute`, `LandingPageMetadata`,
 `LandingPageOpenGraphMetadata`, `LandingPageTwitterMetadata`,
 `LandingPageIcon`, `defineLandingPageData`, `LandingPageDataConfig`,
-`LandingPageDataSource`, and `LandingPageDataSources`. Generic selectors start
+`LandingPageDataSource`, `LandingPageDataSources`, `LandingPageData`,
+`GenericLandingPageData`, `AdapterLandingPageData`, `LandingPageDataRoute`,
+`LandingPageMarkdown`, and `validateLandingPageData`. Generic selectors start
 `szd-`; generic tokens start
 `--szd-`. CLI input and error behavior is specified in the repository README.
 
@@ -22,10 +24,11 @@ outside the generated entry directory.
 ## Escaping
 
 Every value the package interpolates into a document it owns is HTML-escaped.
-That covers the custom-adapter static head and the generic shell's title,
-description, canonical URL, documentation URL and repository URL. The two
-values emitted verbatim are named and validated elsewhere: a body route's
-`body` and its `stylesheet`. Generic Markdown is sanitized, not escaped.
+That covers the custom-adapter static head, every site-wide stylesheet link,
+and the generic shell's title, description, canonical URL, documentation URL
+and repository URL. The two values emitted verbatim are named and validated
+elsewhere: a body route's `body` and its `stylesheet`. Generic Markdown is
+sanitized, not escaped.
 
 ## JSON-backed site data
 
@@ -40,11 +43,11 @@ optional theme CSS, and an optional public-directory path. Every Markdown
 value may carry a repository-relative `assetBase`; it defaults to the
 repository root.
 
-`AdapterLandingPageData` has `kind: "adapter"` and carries `allow`, `publicDir`
-and the existing entry/body route declarations. Entry-module paths and public
-assets remain filesystem references; CSS and body-route stylesheets are strings
-in the model. An entry route may additionally declare `dataSourceIds`; body
-routes may not.
+`AdapterLandingPageData` has `kind: "adapter"` and carries `allow`, `publicDir`,
+`styles` and the existing entry/body route declarations. Entry-module paths,
+site-wide stylesheets and public assets remain filesystem references; theme CSS
+and body-route stylesheets are strings in the model. An entry route may
+additionally declare `dataSourceIds`; body routes may not.
 
 The CLI accepts `--source-map` (default `site/sources.public.yml`) and
 `--source-id` (default `landing-page`). An explicitly named but missing source
@@ -120,3 +123,23 @@ above, which is identical for both route forms. A `body` route may also declare
 a `stylesheet`, which the adapter emits verbatim as the last element of the head
 inside a `<style>` element; CSS containing the string `</style` is rejected, and
 a `stylesheet` declared on an `entry` route is rejected rather than dropped.
+
+## Site-wide stylesheets
+
+`styles` declares repository-relative CSS files belonging to the site rather
+than to any route. Each is copied to the output and emitted as a
+`<link rel="stylesheet">` in the head of every custom-adapter route, entry and
+body alike; no route opts out and no route adds one of its own. Declaration
+order is emission order, and the links precede a body route's `stylesheet`,
+which the head already places last — so a route's own CSS overrides site-wide
+rules and never the reverse.
+
+The field is available on `LandingPageConfig` and on `AdapterLandingPageData`,
+so a TypeScript adapter, a JSON adapter model and a site composed by
+`defineLandingPageData` express it identically. It does not reach the generic
+shell, whose CSS is the theme file that form already owns.
+
+A declared file that cannot be read ends the build rather than being dropped: a
+site that builds and serves unstyled is the silent failure the declared-source
+rules exist to prevent. An absent or empty `styles` emits no link and no
+default.

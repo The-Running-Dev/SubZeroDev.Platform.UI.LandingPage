@@ -35,14 +35,27 @@
 .PARAMETER Quiet
     Suppresses the human-readable report only. The result object is always emitted.
 
+.PARAMETER SlicePrefix
+    The letters a slice id starts with, before its number - "S" in "S3.1". Defaults to "S",
+    the kit's own convention. A repository whose design/30-slices.md documents a different
+    vocabulary (for example "UI<n>") passes that prefix here; every regex below is anchored to
+    it rather than to a literal "S", so nothing else needs to change to support a different
+    scheme. Slice headings are matched at any heading level from ## to ######, so a document
+    that nests individual slices one level deeper than the kit's own worked examples (### under
+    a ## group heading, rather than ## slices directly under a # title) needs no extra flag.
+
 .EXAMPLE
     pwsh ./tools/Test-DesignDrift.ps1
+
+.EXAMPLE
+    pwsh ./tools/Test-DesignDrift.ps1 -SlicePrefix UI
 #>
 [CmdletBinding()]
 param(
     [string] $SlicesPath,
     [string] $Repository,
-    [switch] $Quiet
+    [switch] $Quiet,
+    [string] $SlicePrefix = 'S'
 )
 
 Set-StrictMode -Version Latest
@@ -86,7 +99,9 @@ function New-Failure {
     questions section - and a whole-file regex would count those as criteria that exist.
 #>
 function Get-SliceCriteria {
-    param([Parameter(Mandatory)][string] $Path)
+    param([Parameter(Mandatory)][string] $Path, [string] $Prefix = 'S')
+
+    $escapedPrefix = [regex]::Escape($Prefix)
 
     if (-not (Test-Path -LiteralPath $Path)) {
         return [pscustomobject]@{
@@ -96,37 +111,57 @@ function Get-SliceCriteria {
         }
     }
 
-    $slices  = @{}
-    $landed  = [System.Collections.Generic.List[int]]::new()
-    $current = $null
+    $slices    = @{}
+    $landed    = [System.Collections.Generic.List[int]]::new()
+    $current   = $null
+    $inLanded  = $false
 
     foreach ($line in (Get-Content -LiteralPath $Path)) {
-        if ($line -match '^##\s') {
-            # A new second-level heading always ends the previous slice's body, so an
-            # Acceptance line can never be attributed across a section boundary.
-            $current = if ($line -match '^##\s+S(?<n>\d+)\b') { [int]$Matches['n'] } else { $null }
-            if ($null -ne $current -and -not $slices.ContainsKey($current)) {
-                $slices[$current] = [System.Collections.Generic.List[string]]::new()
+        if ($line -match '^(?<hashes>#{2,6})\s+(?<text>.*?)\s*$') {
+            # A new heading at any level (## group headings, ### individual slices - this
+            # repository's own design/30-slices.md nests slices one level deeper than the
+            # kit's worked examples) always ends the previous slice's body, so an Acceptance
+            # line can never be attributed across a section boundary.
+            $depth = $Matches['hashes'].Length
+            $text  = $Matches['text']
+
+            if ($depth -eq 2) {
+                # This repository's own '## Landed' group heading nests individual slices as
+                # '### UI<n>' headings beneath it, never as the kit's landed-table rows (the
+                # separate check below). A slice heading found while inside that group is
+                # landed, not outstanding, and is tracked in $landed instead of $slices - it
+                # is not owed an issue and its criteria are not compared.
+                $inLanded = [bool]($text -match '^Landed\b')
+            }
+
+            $current = if ($text -match "^$escapedPrefix(?<n>\d+)\b") { [int]$Matches['n'] } else { $null }
+            if ($null -ne $current) {
+                if ($inLanded) {
+                    if (-not $landed.Contains($current)) { $landed.Add($current) }
+                    $current = $null
+                } elseif (-not $slices.ContainsKey($current)) {
+                    $slices[$current] = [System.Collections.Generic.List[string]]::new()
+                }
             }
             continue
         }
 
-        if ($line -match '^\|\s*\*\*S(?<n>\d+)\*\*\s*\|') {
+        if ($line -match "^\|\s*\*\*$escapedPrefix(?<n>\d+)\*\*\s*\|") {
             $landed.Add([int]$Matches['n'])
             continue
         }
 
-        if ($null -ne $current -and $line -match '^\s*-\s+S(?<n>\d+)\.(?<m>\d+)\b') {
+        if ($null -ne $current -and $line -match "^\s*-\s+$escapedPrefix(?<n>\d+)\.(?<m>\d+)\b") {
             if ([int]$Matches['n'] -ne $current) {
                 # An id numbered for a different slice than the section it sits in. Reported
                 # rather than silently filed under either, because it is a defect in the doc.
                 if (-not $slices.ContainsKey(-1)) {
                     $slices[-1] = [System.Collections.Generic.List[string]]::new()
                 }
-                $slices[-1].Add("S$($Matches['n']).$($Matches['m']) (found under S$current)")
+                $slices[-1].Add("$Prefix$($Matches['n']).$($Matches['m']) (found under $Prefix$current)")
                 continue
             }
-            $slices[$current].Add("S$($Matches['n']).$($Matches['m'])")
+            $slices[$current].Add("$Prefix$($Matches['n']).$($Matches['m'])")
         }
     }
 
@@ -138,26 +173,28 @@ function Get-SliceCriteria {
 }
 
 function Get-IssueCriteria {
-    param([string] $Body)
+    param([string] $Body, [string] $Prefix = 'S')
     if ([string]::IsNullOrWhiteSpace($Body)) { return @() }
 
+    $escapedPrefix = [regex]::Escape($Prefix)
     $ids = [System.Collections.Generic.List[string]]::new()
     foreach ($line in ($Body -split "`r?`n")) {
-        if ($line -match '^\s*-\s*\[[ xX]\]\s*\*{0,2}S(?<n>\d+)\.(?<m>\d+)\*{0,2}') {
-            $ids.Add("S$($Matches['n']).$($Matches['m'])")
+        if ($line -match "^\s*-\s*\[[ xX]\]\s*\*{0,2}$escapedPrefix(?<n>\d+)\.(?<m>\d+)\*{0,2}") {
+            $ids.Add("$Prefix$($Matches['n']).$($Matches['m'])")
         }
     }
     @($ids)
 }
 
 function Get-IssuePin {
-    param([string] $Body)
+    param([string] $Body, [string] $Prefix = 'S')
     if ([string]::IsNullOrWhiteSpace($Body)) { return $null }
+    $escapedPrefix = [regex]::Escape($Prefix)
     # The backtick after `.md` is not optional decoration: track.md's pin format is
     # `design/30-slices.md` § S3 @ `a1b2c3d`, so the path is code-fenced and the closing
     # fence sits between `.md` and the section mark. Omitting it here matched no real issue
     # at all - caught by the first CI run of this file's tests, not by reading it.
-    if ($Body -match '30-slices\.md`?\s*§\s*S(?<n>\d+)\s*@\s*`?(?<sha>[0-9a-fA-F]{7,40})`?') {
+    if ($Body -match "30-slices\.md``?\s*§\s*$escapedPrefix(?<n>\d+)\s*@\s*``?(?<sha>[0-9a-fA-F]{7,40})``?") {
         return [pscustomobject]@{ Slice = [int]$Matches['n']; Sha = $Matches['sha'] }
     }
     $null
@@ -212,12 +249,12 @@ function Test-CommitIsAncestor {
 }
 
 function Invoke-DriftCheck {
-    param([string] $SlicesPath, [string] $Repository)
+    param([string] $SlicesPath, [string] $Repository, [string] $SlicePrefix = 'S')
 
     $findings = [System.Collections.Generic.List[object]]::new()
     $failures = [System.Collections.Generic.List[object]]::new()
 
-    $doc = Get-SliceCriteria -Path $SlicesPath
+    $doc = Get-SliceCriteria -Path $SlicesPath -Prefix $SlicePrefix
     if ($doc.Failure) {
         $failures.Add($doc.Failure)
         return New-DriftResult -State 'NotEvaluated' -Failures $failures
@@ -241,21 +278,21 @@ function Invoke-DriftCheck {
 
     foreach ($number in ($doc.Slices.Keys | Sort-Object)) {
         $docIds = @($doc.Slices[$number] | Sort-Object -Unique)
-        $issue  = $tracker.Issues | Where-Object { $_.title -match "^S$number\b" } | Select-Object -First 1
+        $issue  = $tracker.Issues | Where-Object { $_.title -match "^$([regex]::Escape($SlicePrefix))$number\b" } | Select-Object -First 1
 
         if (-not $issue) {
-            $findings.Add((New-Finding -Kind 'NoIssue' -Slice "S$number" -Detail 'slice has no issue; /track opens one' -Issue 0))
+            $findings.Add((New-Finding -Kind 'NoIssue' -Slice "$SlicePrefix$number" -Detail 'slice has no issue; /track opens one' -Issue 0))
             continue
         }
 
         $compared++
-        $issueIds = @(Get-IssueCriteria -Body $issue.body | Sort-Object -Unique)
+        $issueIds = @(Get-IssueCriteria -Body $issue.body -Prefix $SlicePrefix | Sort-Object -Unique)
 
         foreach ($id in ($docIds | Where-Object { $_ -notin $issueIds })) {
-            $findings.Add((New-Finding -Kind 'InDocNotIssue' -Slice "S$number" -Detail $id -Issue $issue.number))
+            $findings.Add((New-Finding -Kind 'InDocNotIssue' -Slice "$SlicePrefix$number" -Detail $id -Issue $issue.number))
         }
         foreach ($id in ($issueIds | Where-Object { $_ -notin $docIds })) {
-            $findings.Add((New-Finding -Kind 'InIssueNotDoc' -Slice "S$number" -Detail $id -Issue $issue.number))
+            $findings.Add((New-Finding -Kind 'InIssueNotDoc' -Slice "$SlicePrefix$number" -Detail $id -Issue $issue.number))
         }
     }
 
@@ -263,11 +300,11 @@ function Invoke-DriftCheck {
     # their issues closed (design/30-slices.md, "How this document is kept"). Comparing ids
     # for one would report every criterion as removed, so only the pin is checked.
     foreach ($issue in $tracker.Issues) {
-        $pin = Get-IssuePin -Body $issue.body
+        $pin = Get-IssuePin -Body $issue.body -Prefix $SlicePrefix
         if (-not $pin) { continue }
 
         switch (Test-CommitIsAncestor -Sha $pin.Sha) {
-            'NotAncestor'  { $findings.Add((New-Finding -Kind 'PinNotAncestor' -Slice "S$($pin.Slice)" -Detail $pin.Sha -Issue $issue.number)) }
+            'NotAncestor'  { $findings.Add((New-Finding -Kind 'PinNotAncestor' -Slice "$SlicePrefix$($pin.Slice)" -Detail $pin.Sha -Issue $issue.number)) }
             'Unresolvable' { $failures.Add((New-Failure -Reason 'PinUnresolvable' -Detail "#$($issue.number) pins $($pin.Sha), which this clone cannot resolve")) }
         }
     }
@@ -320,7 +357,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     if (-not $SlicesPath) {
         $SlicesPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'design/30-slices.md'
     }
-    $result = Invoke-DriftCheck -SlicesPath $SlicesPath -Repository $Repository
+    $result = Invoke-DriftCheck -SlicesPath $SlicesPath -Repository $Repository -SlicePrefix $SlicePrefix
     if (-not $Quiet) { Write-DriftReport -Result $result }
     $result
     exit (Get-DriftExitCode -State $result.State)
