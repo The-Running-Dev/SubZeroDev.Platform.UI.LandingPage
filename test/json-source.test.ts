@@ -94,6 +94,7 @@ describe("JSON source resolution", () => {
       "utf8",
     );
     expect(fromUrl).toContain("<h1>Remote site</h1>");
+    expect(fromUrl).not.toContain("szd-json-sources");
     expect(fromUrl).toBe(
       await readFile(join(local, "site", "dist", "index.html"), "utf8"),
     );
@@ -333,5 +334,41 @@ describe("JSON source resolution", () => {
       "version: 1\nsources:\n  landing-page:\n    at: runtime\n    url: https://example.test/landing.json\n    cache: manual\n",
     );
     await expect(build(root)).rejects.toThrow(/must declare at: build/);
+  }, 60000);
+
+  it("emits a defineLandingPageData route's declared runtime data sources instead of failing (UI5.3)", async () => {
+    const port = await serve({ headline: "Hello" });
+    const root = await fixture(
+      `version: 1\nsources:\n  content:\n    at: build\n    url: http://127.0.0.1:${port}/content.json\n    cache: manual\n  x:\n    at: runtime\n    url: https://example.test/x.json\n    cache: manual\n`,
+    );
+    await mkdir(join(root, "site", "src"), { recursive: true });
+    await writeFile(join(root, "site", "src", "main.ts"), "export {};", "utf8");
+    await writeFile(
+      join(root, "site", "landing.config.ts"),
+      `export default {
+         sources: { content: { id: "content", validate: (raw: unknown) => ({ ok: true as const, value: raw }) } },
+         config: () => ({
+           routes: [
+             {
+               path: "/",
+               entry: "src/main.ts",
+               dataSourceIds: ["x"],
+               metadata: { title: "Home", description: "Home page" },
+             },
+           ],
+         }),
+       };`,
+      "utf8",
+    );
+    await build(root);
+    const home = await readFile(
+      join(root, "site", "dist", "index.html"),
+      "utf8",
+    );
+    expect(home).toContain(
+      '<script type="application/json" id="szd-json-sources">',
+    );
+    expect(home).toContain('"x"');
+    expect(home).not.toContain('"content"');
   }, 60000);
 });

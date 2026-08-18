@@ -13,7 +13,6 @@ import {
   loadAdapterExport,
 } from "./adapter.js";
 import type { LandingPageDataConfig } from "./index.js";
-import { assertRoute, assertUniquePaths } from "./route.js";
 import { generateChangelog } from "./changelog.js";
 import {
   buildGeneric,
@@ -270,9 +269,13 @@ async function buildAdapterData(
     }
     if (failures.length > 0) throw new Error(failures.join("\n"));
     const config = declaration.config(data);
-    for (const route of config.routes) assertRoute(route);
-    assertUniquePaths(config.routes);
-    await buildAdapterConfig(root, dirname(adapterPath), config, outDir);
+    await buildAdapterConfig(
+      root,
+      dirname(adapterPath),
+      config,
+      outDir,
+      prefetched.runtimeMap,
+    );
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

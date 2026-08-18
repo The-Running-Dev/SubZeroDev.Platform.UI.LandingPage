@@ -5,7 +5,7 @@ import { build as viteBuild, createServer } from "vite";
 import { tsImport } from "tsx/esm/api";
 import type { LandingPageConfig, LandingPageDataConfig } from "./index.js";
 import type { SourceMap } from "subzerodev-data-json";
-import { assertRoute, isBodyRoute } from "./route.js";
+import { assertRoute, assertUniquePaths, isBodyRoute } from "./route.js";
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -88,7 +88,8 @@ function meta(property: string, content: string): string {
   return `<meta property="${property}" content="${escapeHtml(content)}">`;
 }
 
-function html(
+/** Not part of the package's public npm surface; exported for direct testing. */
+export function html(
   route: LandingPageConfig["routes"][number],
   root: string,
   runtimeMap?: SourceMap,
@@ -128,7 +129,7 @@ function html(
   const icons = (metadata.icons ?? [])
     .map(
       (icon) =>
-        `<link rel="${icon.rel}" href="${escapeHtml(icon.href)}"${icon.type ? ` type="${escapeHtml(icon.type)}"` : ""}${icon.sizes ? ` sizes="${escapeHtml(icon.sizes)}"` : ""}>`,
+        `<link rel="${escapeHtml(icon.rel)}" href="${escapeHtml(icon.href)}"${icon.type ? ` type="${escapeHtml(icon.type)}"` : ""}${icon.sizes ? ` sizes="${escapeHtml(icon.sizes)}"` : ""}>`,
     )
     .join("");
   const themeColor = metadata.themeColor
@@ -143,7 +144,7 @@ function html(
       : "";
   const body = isBodyRoute(route)
     ? `${route.body}${noScript}`
-    : `<div id="root"></div>${noScript}${runtimeMap ? `<script type="application/json" id="szd-json-sources">${JSON.stringify(runtimeMap).replaceAll("<", "\\u003c")}</script>` : ""}<script type="module" src="/${relative(root, resolve(root, route.entry)).replaceAll("\\", "/")}"></script>`;
+    : `<div id="root"></div>${noScript}${runtimeMap ? `<script type="application/json" id="szd-json-sources">${JSON.stringify(runtimeMap).replaceAll("<", "\\u003c")}</script>` : ""}<script type="module" src="/${escapeHtml(relative(root, resolve(root, route.entry)).replaceAll("\\", "/"))}"></script>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(metadata.title)}</title><meta name="description" content="${escapeHtml(metadata.description)}">${canonical}${image}${openGraph}${twitter}${themeColor}${icons}${stylesheet}</head><body>${body}</body></html>`;
 }
 
@@ -197,6 +198,7 @@ export async function buildAdapterConfig(
   runtimeSourceMap?: SourceMap,
 ): Promise<void> {
   for (const route of config.routes) assertRoute(route);
+  assertUniquePaths(config.routes);
   const temporary = join(siteRoot, `.szd-tmp-${process.pid}`);
   await rm(temporary, { recursive: true, force: true });
   await mkdir(temporary, { recursive: true });
