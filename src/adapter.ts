@@ -129,7 +129,7 @@ export function html(
   const icons = (metadata.icons ?? [])
     .map(
       (icon) =>
-        `<link rel="${icon.rel}" href="${escapeHtml(icon.href)}"${icon.type ? ` type="${escapeHtml(icon.type)}"` : ""}${icon.sizes ? ` sizes="${escapeHtml(icon.sizes)}"` : ""}>`,
+        `<link rel="${escapeHtml(icon.rel)}" href="${escapeHtml(icon.href)}"${icon.type ? ` type="${escapeHtml(icon.type)}"` : ""}${icon.sizes ? ` sizes="${escapeHtml(icon.sizes)}"` : ""}>`,
     )
     .join("");
   const themeColor = metadata.themeColor
