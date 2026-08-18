@@ -1,5 +1,134 @@
 # Decisions
 
+### 2026-08-19 — `preview` builds before serving
+
+Context: issue #5's own "one real decision," left open when the rest of
+`preview`'s contract was drafted. Not building leaves an existing `outDir`
+alone and makes the served tree unambiguously whatever produced it; building
+first removes the absent-`outDir` error and always shows the current source,
+at the cost that `build` clears `outDir` before writing, so a build failing
+after the clear leaves `preview` with nothing to serve.
+Chosen: `preview` always builds first, then serves. No `--no-build` flag, no
+absent-`outDir` error path.
+Rejected: **serve-only, requiring an existing build** — avoids the clear-then-
+fail hazard entirely, and was the recommendation when this fork was raised, but
+was not the owner's choice: shown the tradeoff, the owner chose the command
+that always reflects current source over the one that cannot destroy an
+existing build.
+Reversibility: expensive once consumers depend on `preview` always building —
+withdrawing that and requiring a separate `build` step first is a breaking
+behaviour change to a shipped command.
+
+### 2026-08-19 — Consumer Vite plugins reach both `build` and `dev`
+
+Context: issue #4's own flagged design question, left open when the rest of
+the plugin contract was drafted: whether `LandingPageConfig` plugins apply to
+`build`, `dev`, or both, and what that implies for the package's output
+guarantees.
+Chosen: one field, `plugins?: readonly PluginOption[]`, spread into both Vite
+calls identically. Declaring plugins affects the shipped artifact, not only
+the dev experience; the static-head, route-path and output-layout guarantees
+hold only where no plugins are declared.
+Rejected: **dev-only (`devPlugins`)** — keeps the built-output guarantees
+unconditional regardless of whether plugins are declared, and was the
+recommendation when this fork was raised, but was not the owner's choice: a
+consumer needing a build-time transform (an SVG-as-component or i18n plugin,
+not only Fast Refresh) would have had no route without reopening this
+decision. **Two separate lists (`buildPlugins`/`devPlugins`)** — no capability
+loss, most explicit at the call site, but the widest surface to maintain and
+later withdraw, for a need issue #4 demonstrated only for `dev`.
+Reversibility: expensive. Once a consumer's `build` depends on a declared
+plugin, narrowing the field to dev-only is a breaking change.
+
+### 2026-08-19 — `preview` is mode-agnostic and shares one static server with `dev`
+
+Context: issue #5. The static file server exists but only on `dev`'s generic
+branch, so an adapter consumer cannot look at its built output without
+reinstating the direct `vite` dependency the package exists to remove. Two
+shapes were available: a `preview` that resolves input mode the way `build`
+does and serves accordingly, or one that treats the built tree as its whole
+input.
+Chosen: `preview` reads no adapter module and no source map. `outDir` is the
+input; `--out-dir` and `--port` are the only flags. One static server
+implementation serves both `preview` and generic `dev`.
+Rejected: **resolving input mode in `preview`** — it would duplicate `build`'s
+precedence ladder in a command that serves files, and give the two a way to
+disagree about which mode a site is in while one of them is being used to check
+the other's output. **A second server implementation for adapter mode** — the
+duplication issue #5 explicitly rules out, and the copies would drift on the
+three things that decide whether the built site actually runs: resolution,
+containment and content type.
+Reversibility: cheap for the server sharing. Adding mode resolution to
+`preview` later would be a behaviour change to a shipped command, so that
+direction is not.
+
+### 2026-08-19 — The shared static server normalises directory URLs, contains resolution to `outDir`, and sets `Content-Type`
+
+Context: writing `preview`'s contract against the existing server surfaced three
+properties it does not have. It appends `index.html` only when the URL already
+ends in `/`, so `/roadmap` 404s while `/roadmap/` works — the adapter's own dev
+middleware normalises exactly this case, so the three servers disagree. It joins
+the raw `request.url` to `outDir`, so a query string reaches the filename and a
+`..` segment resolves outside the directory. It sets no `Content-Type` at all,
+which a built adapter route does not survive: a module script served without a
+JavaScript type does not execute.
+Chosen: state all three as invariants of the shared server — pathname only,
+percent-decoded once, directory URLs resolving to `index.html`, anything
+resolving outside `outDir` answered as a 404 with no filesystem detail, and a
+`Content-Type` on every 200. Issue #5's non-goal forbids changing `dev`'s
+behaviour, and sharing the server does change it: a request that 404s today may
+answer 200, and responses gain a header. Each of those changes is on a path that
+is currently a defect rather than a behaviour anyone can be relying on.
+Rejected: **keeping the server exactly as it is and reading the non-goal
+literally** — it ships a `preview` that cannot serve the adapter output it was
+written for, since the module scripts would not execute. **Fixing containment
+and content type but not directory normalisation** — it leaves `preview`
+disagreeing with the adapter dev server about the same URL, which is the
+divergence sharing the implementation is meant to prevent.
+Reversibility: cheap. Each is a property of one server function, and none is a
+declared public field.
+
+### 2026-08-19 — Consumer Vite plugins are a TypeScript-adapter surface only, never a JSON-model field
+
+Context: issue #4. The 2026-08-15 `styles` entry established the opposite
+default — a capability carried on `LandingPageConfig` should also be carried on
+`AdapterLandingPageData` so a TypeScript adapter, a JSON model and a
+`defineLandingPageData` site express it identically. Plugins cannot follow that
+rule.
+Chosen: the plugin declaration lives on `LandingPageConfig` alone. A plugin is
+code; the JSON model is data the package may fetch over HTTP; a fetched document
+that could name code the builder then executes is a different class of surface
+from one that names a CSS path. A `defineLandingPageData` site returns a
+`LandingPageConfig` and so declares plugins like any other adapter, which is why
+the exclusion costs no capability.
+Rejected: **a plugin-specifier field on `AdapterLandingPageData`** (a module
+path resolved at build time) — it is the parity the `styles` entry would
+predict, and it turns the JSON model into remote code selection. **Widening the
+model later if a consumer asks** — recording the exclusion now is what stops the
+question being reopened as an oversight; it is a stated boundary, not a gap.
+Reversibility: cheap in the chosen direction — nothing is added to the model.
+Expensive to reverse: adding a code-naming field to a fetched model is a
+security decision, not an additive one.
+
+### 2026-08-19 — `fs.allow` stays package-owned, and a plugin cannot widen it
+
+Context: issue #4's third acceptance criterion. Vite merges plugin-returned
+configuration into the inline configuration, and `server.fs.allow` is an array,
+so a consumer plugin returning one would extend the sandbox the adapter
+narrowed — implicitly, and invisibly to the `allow` field that exists to make
+that widening reviewable.
+Chosen: the resolved `fs.allow` is exactly the site root plus the resolved
+`allow` entries. Plugin-supplied additions do not take effect and end the run
+naming the entries refused.
+Rejected: **silently re-narrowing after plugin resolution** — the consumer's
+dev server then fails to read a file its plugin asked for, with nothing saying
+why; a refusal that names the entries points straight at `allow`. **Letting
+plugins widen it, since dev is not the shipped artifact** — the narrowing exists
+because a dev server serves the filesystem to a browser, and that argument does
+not weaken because the output is not published.
+Reversibility: cheap. It is a check at one call site with no declared field
+attached.
+
 ### 2026-08-15 — `LandingPageMetadata.repositoryUrl` is withdrawn
 
 Context: `/contract` found a third public field read by nothing. It is typed on

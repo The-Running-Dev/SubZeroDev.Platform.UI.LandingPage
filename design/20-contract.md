@@ -143,3 +143,75 @@ A declared file that cannot be read ends the build rather than being dropped: a
 site that builds and serves unstyled is the silent failure the declared-source
 rules exist to prevent. An absent or empty `styles` emits no link and no
 default.
+
+## Serving built output
+
+`preview` serves an already-built `outDir` over `node:http` for generic and
+custom-adapter sites alike. It reads no adapter module and no source map: the
+built tree is its whole input, so the command cannot branch on input mode and
+cannot disagree with `build` about which mode a site is in. It honours
+`--out-dir` and `--port` and no other flag.
+
+One static server implementation serves both `preview` and generic `dev`. A
+second copy is what would let the two diverge on resolution, containment or
+content type, and the built tree is the artifact that ships, so a divergence
+there is a divergence about the thing being inspected.
+
+Resolution is over the request's pathname alone — a query or fragment never
+reaches the filesystem — percent-decoded once, then resolved against `outDir`. A
+pathname that is `/`, ends in `/`, or names a directory resolves to `index.html`
+within it, so a route path and the URL a reader types for it name the same
+document. A path resolving outside `outDir` is never read: it is a 404, the same
+response as a path naming no file, and neither response carries filesystem
+detail. This is the serving half of the containment rule the adapter already
+holds when writing entry documents.
+
+Every 200 carries a `Content-Type` derived from the file's extension. It is not
+cosmetic: a built adapter route loads its bundle as a module script, and a module
+served without a JavaScript type does not execute — the built site would fail in
+the one command written to inspect it.
+
+`preview` builds before serving: it runs the same build the site's mode already
+uses, then serves the `outDir` that produced. There is no `--no-build` escape
+and no absent-`outDir` error, because there is never an absent `outDir` to
+report on. This accepts the risk named when the decision was made — `build`
+clears `outDir` before writing, so a build that fails after the clear leaves
+`preview` with nothing to serve — as the cost of a command that always shows
+the current source, not a build that may be stale by however long it has been
+since the last one ran.
+
+## Consumer Vite plugins
+
+A custom-adapter site may declare its own Vite plugins. The declaration is on
+`LandingPageConfig` and nowhere else. `AdapterLandingPageData` does not carry it:
+a plugin is code, the JSON model is data the package may fetch over HTTP, and a
+fetched document must never name something the builder then executes. That
+asymmetry with `styles` is deliberate, not an oversight. A site composed by
+`defineLandingPageData` returns a `LandingPageConfig` and so declares plugins
+like any other adapter.
+
+Declaring no plugins changes nothing: emitted entry HTML, the `/`-relative entry
+paths, `publicDir` staging and site-wide stylesheet links are what they were.
+
+`configFile: false` is unconditional. A plugin may not reintroduce a
+consumer-owned Vite configuration file, which is the duplication the adapter
+exists to remove.
+
+The dev server's `server.fs.allow` is exactly the site root plus the resolved
+`allow` entries. Plugin-supplied configuration that would extend it does not take
+effect; the run ends naming the entries it refused. A consumer widens that
+sandbox through `allow`, which is declared and reviewable, or not at all.
+
+Package-owned plugins keep their position. The adapter's route middleware still
+registers ahead of Vite's built-in middlewares, and no consumer plugin displaces
+it; consumer plugins follow the package's own, in declaration order.
+
+`LandingPageConfig.plugins?: readonly PluginOption[]` reaches both `build` and
+`dev` — one list, spread into both Vite calls identically. Declaring plugins
+therefore does affect the shipped artifact, not only the dev experience: what
+the package stops guaranteeing is stated rather than left to be discovered. A
+plugin can rewrite emitted HTML and asset URLs, so the static-head, route-path
+and output-layout guarantees hold only where a site declares no plugins; where
+one is declared, the plugin's output is on the consumer, the same way a
+site-wide stylesheet's _content_ is never validated by this package, only its
+path and containment are.
