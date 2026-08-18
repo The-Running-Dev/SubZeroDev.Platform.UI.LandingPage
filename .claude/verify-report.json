@@ -3,12 +3,12 @@
     {
       "name": "npm run format:check",
       "status": "Passed",
-      "detail": "prettier --check . — All matched files use Prettier code style! (after prettier --write on design/20-contract.md and .claude/gates.json)"
+      "detail": "prettier --check . — All matched files use Prettier code style!"
     },
     {
       "name": "npm run lint",
       "status": "DidNotRun",
-      "reason": "eslint . fails with 88 'No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present' parsing errors, naming this repo root and .claude/worktrees/inspiring-jemison-f70809 as the two candidates. That worktree is a stale, unrelated checkout left under .claude/worktrees/ inside this same clone (detached HEAD at an older commit). This is a docs-only branch touching design/20-contract.md and design/90-decisions.md, neither of which is a .ts file eslint would parse, so the failure is entirely pre-existing environmental collision, unrelated to this branch's diff. Same issue recorded for PR #28 (commit 8e05f59) and reproduced identically on the fix/10-dev-adapter-routes-404 branch (PR #30)."
+      "reason": "eslint . fails with 88 'No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present' parsing errors, naming this repo root and .claude/worktrees/inspiring-jemison-f70809 as the two candidates. That worktree is a stale, unrelated checkout left under .claude/worktrees/ inside this same clone (detached HEAD at an older commit). Confirmed pre-existing and unrelated to this branch: the same 88 errors reproduce identically regardless of this branch's diff. Same environmental collision recorded for PR #28 (commit 8e05f59) and for this branch before the merge (PR #30) and for PR #31."
     },
     {
       "name": "npm run typecheck",
@@ -23,7 +23,7 @@
     {
       "name": "npm test",
       "status": "Passed",
-      "detail": "vitest run — Test Files 18 passed (18), Tests 138 passed (138). This branch changes no src/ or test/ files, so the suite is unaffected by this PR's diff; it is run to confirm the branch as a whole is still green."
+      "detail": "vitest run — Test Files 18 passed (18), Tests 139 passed (139), including the regression test 'serves a config-based adapter's routes over the dev server, reloading the config on each request (#10)'."
     },
     {
       "name": "npm run pack:check",
@@ -37,5 +37,5 @@
     }
   ],
   "discoveredCiGates": [],
-  "discoveryNote": "No .github/workflows/*.yml step in this repository carries a '# verification: true' comment, so zero CI-flagged gates were discovered. All entries above are this repository's optional, non-CI-gated npm run check constituents plus git diff --check. This branch is design-doc-only (design/20-contract.md, design/90-decisions.md); no src/ or test/ files changed."
+  "discoveryNote": "No .github/workflows/*.yml step in this repository carries a '# verification: true' comment, so zero CI-flagged gates were discovered. All entries above are this repository's optional, non-CI-gated npm run check constituents plus git diff --check. Re-verified after merging origin/main (which brought in PR #31's contract amendment) into this branch to resolve a merge conflict confined to this file."
 }

@@ -9,7 +9,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildAdapter, buildAdapterConfig, html } from "../src/adapter.js";
+import {
+  buildAdapter,
+  buildAdapterConfig,
+  devAdapter,
+  html,
+} from "../src/adapter.js";
 
 const roots: string[] = [];
 
@@ -402,6 +407,47 @@ describe("custom adapter", () => {
       buildAdapter(root, "site/landing.config.ts", outDir),
     ).rejects.toThrow("site/missing.css");
     await expect(readdir(outDir)).rejects.toThrow();
+  });
+
+  it("serves a config-based adapter's routes over the dev server, reloading the config on each request (#10)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { routes: [{ path: "/", entry: "src/main.ts", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await writeFile(
+      join(site, "src", "main.ts"),
+      "document.querySelector('#root')!.textContent = 'home';",
+      "utf8",
+    );
+    const server = await devAdapter(root, "site/landing.config.ts");
+    try {
+      const base = server.resolvedUrls?.local[0];
+      if (!base) throw new Error("dev server did not resolve a local URL");
+
+      const home = await (await fetch(base)).text();
+      expect(home).toContain("<title>Home</title>");
+      expect(home).toContain('<script type="module" src="/src/main.ts">');
+
+      await writeFile(
+        join(site, "landing.config.ts"),
+        `export default { routes: [{ path: "/", body: "<main>Updated</main>", metadata: { title: "Updated", description: "Home page" } }, { path: "/roadmap/", body: "<main>Roadmap</main>", metadata: { title: "Roadmap", description: "Roadmap page" } }] };`,
+        "utf8",
+      );
+
+      const updated = await (await fetch(base)).text();
+      expect(updated).toContain("<title>Updated</title>");
+      expect(updated).toContain("<main>Updated</main>");
+
+      const roadmap = await (await fetch(`${base}roadmap/`)).text();
+      expect(roadmap).toContain("<main>Roadmap</main>");
+    } finally {
+      await server.close();
+    }
   });
 
   it("emits no stylesheet link and no default when styles is absent or empty (UI7.5)", async () => {
