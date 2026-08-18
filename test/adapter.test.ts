@@ -3,6 +3,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  realpath,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -464,5 +465,204 @@ describe("custom adapter", () => {
     await buildAdapter(root, "site/landing.config.ts", outDir);
     const home = await readFile(join(outDir, "index.html"), "utf8");
     expect(home).not.toContain('<link rel="stylesheet"');
+  });
+
+  it("runs a declared plugin's transform during build (UI8.1)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { plugins: [{ name: "marker", transform(code, id) { if (id.endsWith("main.ts")) return code.replace("__MARKER__", "REPLACED_BY_PLUGIN"); } }], routes: [{ path: "/", entry: "src/main.ts", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await writeFile(
+      join(site, "src", "main.ts"),
+      "document.querySelector('#root')!.textContent = '__MARKER__';",
+      "utf8",
+    );
+    const outDir = join(site, "dist");
+    await buildAdapter(root, "site/landing.config.ts", outDir);
+    const assetFiles = (await readdir(join(outDir, "assets"))).filter((name) =>
+      name.endsWith(".js"),
+    );
+    const bundled = (
+      await Promise.all(
+        assetFiles.map((name) =>
+          readFile(join(outDir, "assets", name), "utf8"),
+        ),
+      )
+    ).join("\n");
+    expect(bundled).toContain("REPLACED_BY_PLUGIN");
+    expect(bundled).not.toContain("__MARKER__");
+  });
+
+  it("applies the same declared plugin's transform to the dev server's module (UI8.2)", async () => {
+    // Resolved so it matches the realpath Vite itself compares against a
+    // symlinked macOS temp dir — otherwise transformRequest 404s on a path
+    // that does exist, a test-environment quirk unrelated to this slice.
+    const root = await realpath(await mkdtemp(join(tmpdir(), "szd-adapter-")));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { plugins: [{ name: "marker", transform(code, id) { if (id.endsWith("main.ts")) return code.replace("__MARKER__", "REPLACED_BY_PLUGIN"); } }], routes: [{ path: "/", entry: "src/main.ts", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await writeFile(
+      join(site, "src", "main.ts"),
+      "document.querySelector('#root')!.textContent = '__MARKER__';",
+      "utf8",
+    );
+    const server = await devAdapter(root, "site/landing.config.ts");
+    try {
+      const result = await server.transformRequest("/src/main.ts");
+      expect(result?.code).toContain("REPLACED_BY_PLUGIN");
+      expect(result?.code).not.toContain("__MARKER__");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("produces byte-identical output whether plugins is absent or an empty array (UI8.3)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "src", "main.ts"),
+      "document.querySelector('#root')!.textContent = 'home';",
+      "utf8",
+    );
+    const config = (plugins: string) =>
+      `export default { ${plugins}routes: [{ path: "/", entry: "src/main.ts", metadata: { title: "Home", description: "Home page" } }] };`;
+
+    await writeFile(join(site, "landing.config.ts"), config(""), "utf8");
+    const noPluginsField = join(site, "dist-none");
+    await buildAdapter(root, "site/landing.config.ts", noPluginsField);
+
+    await writeFile(
+      join(site, "landing.config.ts"),
+      config("plugins: [], "),
+      "utf8",
+    );
+    const emptyPlugins = join(site, "dist-empty");
+    await buildAdapter(root, "site/landing.config.ts", emptyPlugins);
+
+    const noneHtml = await readFile(join(noPluginsField, "index.html"), "utf8");
+    const emptyHtml = await readFile(join(emptyPlugins, "index.html"), "utf8");
+    expect(emptyHtml).toBe(noneHtml);
+    expect(noneHtml).toContain('<script type="module"');
+  });
+
+  it("keeps the package's route middleware ahead of consumer plugins, which run in declaration order (UI8.4)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default {
+        plugins: [
+          { name: "a", configureServer(server) { server.middlewares.use((req, res, next) => { res.setHeader("x-order-a", "yes"); next(); }); } },
+          { name: "b", configureServer(server) { server.middlewares.use((req, res, next) => { res.setHeader("x-order-b", res.getHeader("x-order-a") ? "after-a" : "first"); next(); }); } },
+        ],
+        routes: [{ path: "/", entry: "src/main.ts", metadata: { title: "Home", description: "Home page" } }],
+      };`,
+      "utf8",
+    );
+    await writeFile(
+      join(site, "src", "main.ts"),
+      "document.querySelector('#root')!.textContent = 'home';",
+      "utf8",
+    );
+    const server = await devAdapter(root, "site/landing.config.ts");
+    try {
+      const base = server.resolvedUrls?.local[0];
+      if (!base) throw new Error("dev server did not resolve a local URL");
+
+      const home = await (await fetch(base)).text();
+      expect(home).toContain("<title>Home</title>");
+
+      const other = await fetch(`${base}not-a-route`);
+      expect(other.headers.get("x-order-a")).toBe("yes");
+      expect(other.headers.get("x-order-b")).toBe("after-a");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("refuses to start when a declared plugin widens server.fs.allow (UI8.5)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { plugins: [{ name: "widen", config() { return { server: { fs: { allow: ["/etc"] } } }; } }], routes: [{ path: "/", entry: "src/main.ts", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await writeFile(join(site, "src", "main.ts"), "export {};", "utf8");
+    await expect(devAdapter(root, "site/landing.config.ts")).rejects.toThrow(
+      "/etc",
+    );
+  });
+
+  it("starts normally with no plugin widening server.fs.allow (UI8.6)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await mkdir(join(root, "extra"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { allow: ["../extra"], routes: [{ path: "/", entry: "src/main.ts", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await writeFile(
+      join(site, "src", "main.ts"),
+      "document.querySelector('#root')!.textContent = 'home';",
+      "utf8",
+    );
+    const server = await devAdapter(root, "site/landing.config.ts");
+    try {
+      const base = server.resolvedUrls?.local[0];
+      if (!base) throw new Error("dev server did not resolve a local URL");
+      const home = await (await fetch(base)).text();
+      expect(home).toContain("<title>Home</title>");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("holds configFile: false unconditionally even with a throwing vite.config.ts, with plugins declared (UI8.8)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "vite.config.ts"),
+      "throw new Error('this config must never be evaluated');",
+      "utf8",
+    );
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { plugins: [{ name: "noop" }], routes: [{ path: "/", entry: "src/main.ts", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await writeFile(
+      join(site, "src", "main.ts"),
+      "document.querySelector('#root')!.textContent = 'home';",
+      "utf8",
+    );
+    const outDir = join(site, "dist");
+    await buildAdapter(root, "site/landing.config.ts", outDir);
+    expect(await readFile(join(outDir, "index.html"), "utf8")).toContain(
+      "<title>Home</title>",
+    );
+    const server = await devAdapter(root, "site/landing.config.ts");
+    await server.close();
   });
 });

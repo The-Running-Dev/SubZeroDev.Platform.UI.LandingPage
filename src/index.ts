@@ -1,4 +1,5 @@
 import type { Validator } from "subzerodev-data-json";
+import type { PluginOption } from "vite";
 import { assertRoute, assertUniquePaths } from "./route.js";
 
 /** Static Open Graph fields emitted for a custom-adapter route. */
@@ -70,6 +71,7 @@ export type LandingPageConfig = {
   allow?: readonly string[];
   publicDir?: string;
   styles?: readonly string[];
+  plugins?: readonly PluginOption[];
 };
 
 /**

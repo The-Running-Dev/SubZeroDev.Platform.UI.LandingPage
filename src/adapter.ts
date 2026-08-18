@@ -16,7 +16,7 @@ import {
   resolve,
 } from "node:path";
 import { pathToFileURL } from "node:url";
-import { build as viteBuild, createServer } from "vite";
+import { build as viteBuild, createServer, type PluginOption } from "vite";
 import { tsImport } from "tsx/esm/api";
 import type { LandingPageConfig, LandingPageDataConfig } from "./index.js";
 import type { SourceMap } from "subzerodev-data-json";
@@ -337,6 +337,7 @@ export async function buildAdapterConfig(
       root: siteRoot,
       configFile: false,
       publicDir,
+      plugins: config.plugins ? [...config.plugins] : [],
       build: { outDir, emptyOutDir: false, rollupOptions: { input } },
     });
     const emitted = join(outDir, basename(temporary));
@@ -350,6 +351,30 @@ export async function buildAdapterConfig(
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+}
+
+/**
+ * Refuses a consumer plugin's attempt to widen `server.fs.allow` beyond what
+ * the adapter itself resolved. `enforce: "post"` puts this hook after every
+ * other plugin's `config` hook — including a consumer's own `enforce: "post"`
+ * plugin, since Vite preserves array order within an enforce tier — so it sees
+ * the fully merged allow list Vite would otherwise use, before Vite's own
+ * defaulting (which adds entries such as its client directory) runs. Throwing
+ * here rejects `createServer` outright: no server begins listening.
+ */
+function fsAllowGuardPlugin(allowed: readonly string[]): PluginOption {
+  return {
+    name: "szd-adapter-fs-allow-guard",
+    enforce: "post",
+    config(userConfig) {
+      const configured = userConfig.server?.fs?.allow ?? [];
+      const extra = configured.filter((entry) => !allowed.includes(entry));
+      if (extra.length > 0)
+        throw new Error(
+          `A declared Vite plugin widened server.fs.allow with: ${extra.join(", ")}. Widen the adapter's own 'allow' field instead.`,
+        );
+    },
+  };
 }
 
 export async function devAdapter(
@@ -408,6 +433,8 @@ export async function devAdapter(
           });
         },
       },
+      ...(config.plugins ?? []),
+      fsAllowGuardPlugin(allowed),
     ],
   });
   await server.listen();

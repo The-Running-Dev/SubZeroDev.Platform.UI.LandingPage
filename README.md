@@ -136,6 +136,30 @@ export default defineLandingPage({
 });
 ```
 
+A configuration may also declare `plugins`, Vite plugins that reach both `build`
+and `dev` from one declared list. Declaring no plugins changes nothing. Declaring
+one does: it can rewrite emitted HTML and asset URLs, so the static-head,
+route-path and output-layout guarantees above hold only for a site that declares
+none — where one is declared, its output is on the consumer. The package's own
+plugin keeps its position ahead of a consumer's; `configFile: false` holds
+unconditionally, so a plugin may not reintroduce a consumer-owned Vite
+configuration file; and the dev server's `server.fs.allow` stays exactly the
+site root plus the resolved `allow` entries — a plugin that tries to widen it
+ends the dev run naming what it tried to add, rather than taking effect.
+
+```ts
+export default defineLandingPage({
+  plugins: [react()],
+  routes: [
+    {
+      path: "/",
+      entry: "src/main.tsx",
+      metadata: { title: "Home", description: "Home page" },
+    },
+  ],
+});
+```
+
 ## Development
 
 ```powershell
