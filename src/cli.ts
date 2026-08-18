@@ -190,6 +190,7 @@ async function buildJsonData(
           routes: data.routes,
           ...(data.allow ? { allow: data.allow } : {}),
           ...(data.publicDir ? { publicDir: data.publicDir } : {}),
+          ...(data.styles ? { styles: data.styles } : {}),
         },
         outDir,
         prefetched.runtimeMap,

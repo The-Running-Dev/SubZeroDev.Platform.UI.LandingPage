@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -308,5 +315,108 @@ describe("custom adapter", () => {
     });
     const home = await readFile(join(site, "dist", "index.html"), "utf8");
     expect(home).not.toContain("szd-json-sources");
+  });
+
+  it("links every declared site-wide stylesheet on every route, before a body route's own style (UI7.1, UI7.2)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await mkdir(join(root, "site", "styles"), { recursive: true });
+    await writeFile(join(root, "site", "styles", "base.css"), "body{}", "utf8");
+    await writeFile(join(root, "site", "styles", "type.css"), "h1{}", "utf8");
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { styles: ["site/styles/base.css", "site/styles/type.css"], routes: [ { path: "/", entry: "src/main.ts", metadata: { title: "Home", description: "Home page" } }, { path: "/legal/", body: "<main>Legal</main>", stylesheet: "main { color: red; }", metadata: { title: "Legal", description: "Legal page" } } ] };`,
+      "utf8",
+    );
+    await writeFile(join(site, "src", "main.ts"), "export {};", "utf8");
+    const outDir = join(site, "dist");
+    await buildAdapter(root, "site/landing.config.ts", outDir);
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    const baseIndex = home.indexOf(
+      '<link rel="stylesheet" href="/assets/styles/site/styles/base.css">',
+    );
+    const typeIndex = home.indexOf(
+      '<link rel="stylesheet" href="/assets/styles/site/styles/type.css">',
+    );
+    expect(baseIndex).toBeGreaterThan(-1);
+    expect(typeIndex).toBeGreaterThan(baseIndex);
+    expect(
+      await readFile(
+        join(outDir, "assets", "styles", "site", "styles", "base.css"),
+        "utf8",
+      ),
+    ).toBe("body{}");
+    expect(
+      await readFile(
+        join(outDir, "assets", "styles", "site", "styles", "type.css"),
+        "utf8",
+      ),
+    ).toBe("h1{}");
+    const legal = await readFile(join(outDir, "legal", "index.html"), "utf8");
+    const legalBaseIndex = legal.indexOf(
+      '<link rel="stylesheet" href="/assets/styles/site/styles/base.css">',
+    );
+    const legalLinkIndex = legal.indexOf(
+      '<link rel="stylesheet" href="/assets/styles/site/styles/type.css">',
+    );
+    const legalStyleIndex = legal.indexOf(
+      "<style>main { color: red; }</style>",
+    );
+    expect(legalBaseIndex).toBeGreaterThan(-1);
+    expect(legalLinkIndex).toBeGreaterThan(legalBaseIndex);
+    expect(legalStyleIndex).toBeGreaterThan(legalLinkIndex);
+  });
+
+  it("rejects a declared stylesheet resolving outside the repository root, writing no output (UI7.4)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    await writeFile(join(root, "outside.css"), "body{}", "utf8");
+    const site = join(root, "repo", "site");
+    await mkdir(site, { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { styles: ["../outside.css"], routes: [{ path: "/", body: "<p>page</p>", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    const outDir = join(site, "dist");
+    await expect(
+      buildAdapter(join(root, "repo"), "site/landing.config.ts", outDir),
+    ).rejects.toThrow("resolves outside the repository root");
+    await expect(readdir(outDir)).rejects.toThrow();
+  });
+
+  it("ends the build with no output directory when a declared stylesheet cannot be read (UI7.4)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(site, { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { styles: ["site/missing.css"], routes: [{ path: "/", body: "<p>page</p>", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    const outDir = join(site, "dist");
+    await expect(
+      buildAdapter(root, "site/landing.config.ts", outDir),
+    ).rejects.toThrow("site/missing.css");
+    await expect(readdir(outDir)).rejects.toThrow();
+  });
+
+  it("emits no stylesheet link and no default when styles is absent or empty (UI7.5)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(site, { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { styles: [], routes: [{ path: "/", body: "<p>page</p>", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    const outDir = join(site, "dist");
+    await buildAdapter(root, "site/landing.config.ts", outDir);
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).not.toContain('<link rel="stylesheet"');
   });
 });

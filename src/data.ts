@@ -34,6 +34,7 @@ export type AdapterLandingPageData = {
   kind: "adapter";
   allow?: readonly string[];
   publicDir?: string;
+  styles?: readonly string[];
   routes: readonly LandingPageDataRoute[];
 };
 
@@ -273,7 +274,11 @@ export function validateLandingPageData(raw: unknown): LandingPageData {
   }
   if (item.kind !== "adapter")
     throw new Error("LandingPageData kind must be 'generic' or 'adapter'.");
-  keys(item, ["version", "kind", "allow", "publicDir", "routes"], "adapter");
+  keys(
+    item,
+    ["version", "kind", "allow", "publicDir", "styles", "routes"],
+    "adapter",
+  );
   if (!Array.isArray(item.routes) || item.routes.length === 0)
     throw new Error(
       "LandingPageData adapter.routes must be a non-empty array.",
@@ -290,5 +295,8 @@ export function validateLandingPageData(raw: unknown): LandingPageData {
     ...(item.publicDir === undefined
       ? {}
       : { publicDir: string(item.publicDir, "adapter.publicDir")! }),
+    ...(item.styles === undefined
+      ? {}
+      : { styles: strings(item.styles, "adapter.styles")! }),
   };
 }

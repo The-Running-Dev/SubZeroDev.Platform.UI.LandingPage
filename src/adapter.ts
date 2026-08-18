@@ -1,5 +1,20 @@
-import { access, cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import {
+  access,
+  cp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 import { pathToFileURL } from "node:url";
 import { build as viteBuild, createServer } from "vite";
 import { tsImport } from "tsx/esm/api";
@@ -92,6 +107,7 @@ function meta(property: string, content: string): string {
 export function html(
   route: LandingPageConfig["routes"][number],
   root: string,
+  styleHrefs: readonly string[] = [],
   runtimeMap?: SourceMap,
 ): string {
   const { metadata } = route;
@@ -138,6 +154,9 @@ export function html(
   const noScript = metadata.noScript
     ? `<noscript>${escapeHtml(metadata.noScript)}</noscript>`
     : "";
+  const styleLinks = styleHrefs
+    .map((href) => `<link rel="stylesheet" href="${escapeHtml(href)}">`)
+    .join("");
   const stylesheet =
     isBodyRoute(route) && route.stylesheet !== undefined
       ? `<style>${route.stylesheet}</style>`
@@ -145,7 +164,7 @@ export function html(
   const body = isBodyRoute(route)
     ? `${route.body}${noScript}`
     : `<div id="root"></div>${noScript}${runtimeMap ? `<script type="application/json" id="szd-json-sources">${JSON.stringify(runtimeMap).replaceAll("<", "\\u003c")}</script>` : ""}<script type="module" src="/${escapeHtml(relative(root, resolve(root, route.entry)).replaceAll("\\", "/"))}"></script>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(metadata.title)}</title><meta name="description" content="${escapeHtml(metadata.description)}">${canonical}${image}${openGraph}${twitter}${themeColor}${icons}${stylesheet}</head><body>${body}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(metadata.title)}</title><meta name="description" content="${escapeHtml(metadata.description)}">${canonical}${image}${openGraph}${twitter}${themeColor}${icons}${styleLinks}${stylesheet}</head><body>${body}</body></html>`;
 }
 
 export async function hasAdapter(
@@ -190,6 +209,90 @@ function filteredMap(
   return { version: 1, sources };
 }
 
+type SiteStyle = { href: string; content: Buffer; relativePath: string };
+
+/**
+ * Reads every declared site-wide stylesheet before anything is written, so a
+ * path that cannot be read ends the build with no output directory written.
+ *
+ * A declared path is repository-relative and becomes both an output path and a
+ * URL, so — as for a route path — one that a resolver treats as a traversal is
+ * rejected rather than resolved: it would publish a file from outside the
+ * repository and emit an href that leaves the output directory. The href is
+ * built per segment so a path holding `#`, `?` or `%` addresses the file that
+ * was written rather than a different one.
+ */
+async function readStyles(
+  root: string,
+  styles: readonly string[] | undefined,
+): Promise<SiteStyle[]> {
+  const result: SiteStyle[] = [];
+  for (const stylePath of styles ?? []) {
+    const resolved = resolve(root, stylePath);
+    const relativePath = relative(root, resolved).replaceAll("\\", "/");
+    if (
+      relativePath === ".." ||
+      relativePath.startsWith("../") ||
+      isAbsolute(relativePath)
+    )
+      throw new Error(
+        `Site-wide stylesheet '${stylePath}' resolves outside the repository root.`,
+      );
+    let content: Buffer;
+    try {
+      content = await readFile(resolved);
+    } catch (cause) {
+      throw new Error(
+        `Site-wide stylesheet '${stylePath}' could not be read.`,
+        {
+          cause,
+        },
+      );
+    }
+    const href = `/assets/styles/${relativePath
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/")}`;
+    result.push({ href, content, relativePath });
+  }
+  return result;
+}
+
+/**
+ * Resolves the public directory Vite copies, staging the site-wide stylesheets
+ * into a copy of it when any are declared. Writing them to the output directory
+ * after the build instead would leave every emitted href unresolved at build
+ * time — Vite warns once per stylesheet and validates none of them, so a href
+ * naming a file that was never written would reach production silently.
+ */
+async function stagePublicDir(
+  root: string,
+  siteRoot: string,
+  declared: string | undefined,
+  styles: readonly SiteStyle[],
+  temporary: string,
+): Promise<string> {
+  const publicDir = declared
+    ? resolve(root, declared)
+    : join(siteRoot, "public");
+  if (styles.length === 0) return publicDir;
+  const staged = join(temporary, ".public");
+  await mkdir(staged, { recursive: true });
+  if (await exists(publicDir))
+    await cp(publicDir, staged, { recursive: true, force: true });
+  for (const style of styles) {
+    const target = join(
+      staged,
+      "assets",
+      "styles",
+      ...style.relativePath.split("/"),
+    );
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, style.content);
+  }
+  return staged;
+}
+
 export async function buildAdapterConfig(
   root: string,
   siteRoot: string,
@@ -199,10 +302,19 @@ export async function buildAdapterConfig(
 ): Promise<void> {
   for (const route of config.routes) assertRoute(route);
   assertUniquePaths(config.routes);
+  const styles = await readStyles(root, config.styles);
+  const styleHrefs = styles.map((style) => style.href);
   const temporary = join(siteRoot, `.szd-tmp-${process.pid}`);
   await rm(temporary, { recursive: true, force: true });
   await mkdir(temporary, { recursive: true });
   try {
+    const publicDir = await stagePublicDir(
+      root,
+      siteRoot,
+      config.publicDir,
+      styles,
+      temporary,
+    );
     const input: Record<string, string> = {};
     for (const route of config.routes) {
       const output = outputEntry(route.path);
@@ -216,7 +328,7 @@ export async function buildAdapterConfig(
       await mkdir(dirname(entryFile), { recursive: true });
       await writeFile(
         entryFile,
-        html(route, siteRoot, filteredMap(route, runtimeSourceMap)),
+        html(route, siteRoot, styleHrefs, filteredMap(route, runtimeSourceMap)),
         "utf8",
       );
       input[output.replaceAll("/", "_").replace(/\.html$/, "")] = entryFile;
@@ -224,9 +336,7 @@ export async function buildAdapterConfig(
     await viteBuild({
       root: siteRoot,
       configFile: false,
-      publicDir: config.publicDir
-        ? resolve(root, config.publicDir)
-        : join(siteRoot, "public"),
+      publicDir,
       build: { outDir, emptyOutDir: false, rollupOptions: { input } },
     });
     const emitted = join(outDir, basename(temporary));
