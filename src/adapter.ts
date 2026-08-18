@@ -7,7 +7,14 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 import { pathToFileURL } from "node:url";
 import { build as viteBuild, createServer } from "vite";
 import { tsImport } from "tsx/esm/api";
@@ -202,11 +209,18 @@ function filteredMap(
   return { version: 1, sources };
 }
 
-type SiteStyle = { href: string; content: Buffer };
+type SiteStyle = { href: string; content: Buffer; relativePath: string };
 
 /**
  * Reads every declared site-wide stylesheet before anything is written, so a
  * path that cannot be read ends the build with no output directory written.
+ *
+ * A declared path is repository-relative and becomes both an output path and a
+ * URL, so — as for a route path — one that a resolver treats as a traversal is
+ * rejected rather than resolved: it would publish a file from outside the
+ * repository and emit an href that leaves the output directory. The href is
+ * built per segment so a path holding `#`, `?` or `%` addresses the file that
+ * was written rather than a different one.
  */
 async function readStyles(
   root: string,
@@ -215,16 +229,68 @@ async function readStyles(
   const result: SiteStyle[] = [];
   for (const stylePath of styles ?? []) {
     const resolved = resolve(root, stylePath);
+    const relativePath = relative(root, resolved).replaceAll("\\", "/");
+    if (
+      relativePath === ".." ||
+      relativePath.startsWith("../") ||
+      isAbsolute(relativePath)
+    )
+      throw new Error(
+        `Site-wide stylesheet '${stylePath}' resolves outside the repository root.`,
+      );
     let content: Buffer;
     try {
       content = await readFile(resolved);
-    } catch {
-      throw new Error(`Site-wide stylesheet '${stylePath}' could not be read.`);
+    } catch (cause) {
+      throw new Error(
+        `Site-wide stylesheet '${stylePath}' could not be read.`,
+        {
+          cause,
+        },
+      );
     }
-    const relativePath = relative(root, resolved).replaceAll("\\", "/");
-    result.push({ href: `/assets/styles/${relativePath}`, content });
+    const href = `/assets/styles/${relativePath
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/")}`;
+    result.push({ href, content, relativePath });
   }
   return result;
+}
+
+/**
+ * Resolves the public directory Vite copies, staging the site-wide stylesheets
+ * into a copy of it when any are declared. Writing them to the output directory
+ * after the build instead would leave every emitted href unresolved at build
+ * time — Vite warns once per stylesheet and validates none of them, so a href
+ * naming a file that was never written would reach production silently.
+ */
+async function stagePublicDir(
+  root: string,
+  siteRoot: string,
+  declared: string | undefined,
+  styles: readonly SiteStyle[],
+  temporary: string,
+): Promise<string> {
+  const publicDir = declared
+    ? resolve(root, declared)
+    : join(siteRoot, "public");
+  if (styles.length === 0) return publicDir;
+  const staged = join(temporary, ".public");
+  await mkdir(staged, { recursive: true });
+  if (await exists(publicDir))
+    await cp(publicDir, staged, { recursive: true, force: true });
+  for (const style of styles) {
+    const target = join(
+      staged,
+      "assets",
+      "styles",
+      ...style.relativePath.split("/"),
+    );
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, style.content);
+  }
+  return staged;
 }
 
 export async function buildAdapterConfig(
@@ -242,6 +308,13 @@ export async function buildAdapterConfig(
   await rm(temporary, { recursive: true, force: true });
   await mkdir(temporary, { recursive: true });
   try {
+    const publicDir = await stagePublicDir(
+      root,
+      siteRoot,
+      config.publicDir,
+      styles,
+      temporary,
+    );
     const input: Record<string, string> = {};
     for (const route of config.routes) {
       const output = outputEntry(route.path);
@@ -263,9 +336,7 @@ export async function buildAdapterConfig(
     await viteBuild({
       root: siteRoot,
       configFile: false,
-      publicDir: config.publicDir
-        ? resolve(root, config.publicDir)
-        : join(siteRoot, "public"),
+      publicDir,
       build: { outDir, emptyOutDir: false, rollupOptions: { input } },
     });
     const emitted = join(outDir, basename(temporary));
@@ -276,11 +347,6 @@ export async function buildAdapterConfig(
       });
     }
     await rm(emitted, { recursive: true, force: true });
-    for (const style of styles) {
-      const target = join(outDir, ...style.href.split("/").filter(Boolean));
-      await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, style.content);
-    }
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
