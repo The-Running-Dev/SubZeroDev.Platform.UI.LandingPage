@@ -352,9 +352,13 @@ export async function buildAdapterConfig(
   }
 }
 
-export async function devAdapter(root: string, adapter: string): Promise<void> {
-  const config = await loadAdapter(resolve(root, adapter));
-  const siteRoot = dirname(resolve(root, adapter));
+export async function devAdapter(
+  root: string,
+  adapter: string,
+): Promise<import("vite").ViteDevServer> {
+  const adapterPath = resolve(root, adapter);
+  const config = await loadAdapter(adapterPath);
+  const siteRoot = dirname(adapterPath);
   const allowed = [
     siteRoot,
     ...(config.allow ?? []).map((item) => resolve(root, item)),
@@ -363,7 +367,50 @@ export async function devAdapter(root: string, adapter: string): Promise<void> {
     root: siteRoot,
     configFile: false,
     server: { fs: { allow: allowed } },
+    plugins: [
+      {
+        name: "szd-adapter-dev-routes",
+        configureServer(devServer) {
+          // Registered directly (not returned) so this runs before Vite's
+          // built-in middlewares, which would otherwise 404 first: neither
+          // "/" nor a route path like "/roadmap/" names a file on disk.
+          devServer.middlewares.use(async (request, response, next) => {
+            if (request.method !== "GET" && request.method !== "HEAD") {
+              next();
+              return;
+            }
+            const pathname = new URL(request.url ?? "/", "http://localhost")
+              .pathname;
+            const routePath =
+              pathname === "/" || pathname.endsWith("/")
+                ? pathname
+                : `${pathname}/`;
+            let route: LandingPageConfig["routes"][number] | undefined;
+            try {
+              const current = await loadAdapter(adapterPath);
+              route = current.routes.find(
+                (candidate) => candidate.path === routePath,
+              );
+            } catch (error) {
+              next(error as Error);
+              return;
+            }
+            if (!route) {
+              next();
+              return;
+            }
+            const document = await devServer.transformIndexHtml(
+              request.url ?? "/",
+              html(route, siteRoot),
+            );
+            response.setHeader("Content-Type", "text/html");
+            response.end(document);
+          });
+        },
+      },
+    ],
   });
   await server.listen();
   server.printUrls();
+  return server;
 }
