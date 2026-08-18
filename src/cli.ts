@@ -272,7 +272,13 @@ async function buildAdapterData(
     const config = declaration.config(data);
     for (const route of config.routes) assertRoute(route);
     assertUniquePaths(config.routes);
-    await buildAdapterConfig(root, dirname(adapterPath), config, outDir);
+    await buildAdapterConfig(
+      root,
+      dirname(adapterPath),
+      config,
+      outDir,
+      prefetched.runtimeMap,
+    );
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

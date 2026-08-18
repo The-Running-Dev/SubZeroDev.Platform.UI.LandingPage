@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildAdapter, buildAdapterConfig } from "../src/adapter.js";
+import { buildAdapter, buildAdapterConfig, html } from "../src/adapter.js";
 
 const roots: string[] = [];
 
@@ -244,5 +244,69 @@ describe("custom adapter", () => {
         },
       ),
     ).rejects.toThrow("declares runtime file source 'runtime-file'");
+  });
+
+  it("escapes an entry path so it cannot inject a second script element (UI5.1)", () => {
+    const doc = html(
+      {
+        path: "/",
+        entry: 'src/x"><script>alert(1)</script>',
+        metadata: { title: "Home", description: "Home page" },
+      },
+      "/site",
+    );
+    expect(doc).toContain(
+      'src="/src/x&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"',
+    );
+    expect(doc.match(/<script/g)?.length).toBe(1);
+  });
+
+  it("rejects a plain-object adapter declaring two routes at the same path, writing no output (UI5.2)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { routes: [ { path: "/", entry: "src/a.ts", metadata: { title: "A", description: "A page" } }, { path: "/", entry: "src/b.ts", metadata: { title: "B", description: "B page" } } ] };`,
+      "utf8",
+    );
+    await writeFile(join(site, "src", "a.ts"), "export {};", "utf8");
+    await writeFile(join(site, "src", "b.ts"), "export {};", "utf8");
+    const outDir = join(site, "dist");
+    await expect(
+      buildAdapter(root, "site/landing.config.ts", outDir),
+    ).rejects.toThrow("Duplicate route path '/'");
+    await expect(
+      readFile(join(outDir, "index.html"), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it("emits no runtime data-source script on a body route, even alongside a source map (UI5.4)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(site, { recursive: true });
+    const config = {
+      routes: [
+        {
+          path: "/",
+          body: "<p>page</p>",
+          metadata: { title: "Home", description: "Home page" },
+        },
+      ],
+    };
+    await buildAdapterConfig(root, site, config, join(site, "dist"), {
+      version: 1,
+      sources: {
+        x: {
+          at: "runtime",
+          url: "https://example.test/x.json",
+          cache: "manual",
+        },
+      },
+    });
+    const home = await readFile(join(site, "dist", "index.html"), "utf8");
+    expect(home).not.toContain("szd-json-sources");
   });
 });
