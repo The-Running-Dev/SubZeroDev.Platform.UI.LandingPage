@@ -11,6 +11,11 @@ const roots: string[] = [];
 const servers: Server[] = [];
 
 const cli = join(process.cwd(), "src", "cli.ts");
+// A bare `--import tsx` resolves as a normal module specifier, which Node looks up from the
+// spawned process's cwd - the mkdtemp fixture root below, which has no node_modules of its
+// own. Resolving it here, from this file's own module context inside the repository, and
+// passing the resolved URL instead of the bare specifier sidesteps that lookup entirely.
+const tsxLoader = import.meta.resolve("tsx");
 
 const model = {
   version: 1,
@@ -41,7 +46,9 @@ async function fixture(sourceMap: string): Promise<string> {
 }
 
 function build(root: string, args = "") {
-  return exec(`node --import tsx "${cli}" build${args}`, { cwd: root });
+  return exec(`node --import "${tsxLoader}" "${cli}" build${args}`, {
+    cwd: root,
+  });
 }
 
 /** A port nothing listens on, so a declared URL source fails to connect. */
