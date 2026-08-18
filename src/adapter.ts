@@ -1,4 +1,12 @@
-import { access, cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  cp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build as viteBuild, createServer } from "vite";
@@ -92,6 +100,7 @@ function meta(property: string, content: string): string {
 export function html(
   route: LandingPageConfig["routes"][number],
   root: string,
+  styleHrefs: readonly string[] = [],
   runtimeMap?: SourceMap,
 ): string {
   const { metadata } = route;
@@ -138,6 +147,9 @@ export function html(
   const noScript = metadata.noScript
     ? `<noscript>${escapeHtml(metadata.noScript)}</noscript>`
     : "";
+  const styleLinks = styleHrefs
+    .map((href) => `<link rel="stylesheet" href="${escapeHtml(href)}">`)
+    .join("");
   const stylesheet =
     isBodyRoute(route) && route.stylesheet !== undefined
       ? `<style>${route.stylesheet}</style>`
@@ -145,7 +157,7 @@ export function html(
   const body = isBodyRoute(route)
     ? `${route.body}${noScript}`
     : `<div id="root"></div>${noScript}${runtimeMap ? `<script type="application/json" id="szd-json-sources">${JSON.stringify(runtimeMap).replaceAll("<", "\\u003c")}</script>` : ""}<script type="module" src="/${escapeHtml(relative(root, resolve(root, route.entry)).replaceAll("\\", "/"))}"></script>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(metadata.title)}</title><meta name="description" content="${escapeHtml(metadata.description)}">${canonical}${image}${openGraph}${twitter}${themeColor}${icons}${stylesheet}</head><body>${body}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(metadata.title)}</title><meta name="description" content="${escapeHtml(metadata.description)}">${canonical}${image}${openGraph}${twitter}${themeColor}${icons}${styleLinks}${stylesheet}</head><body>${body}</body></html>`;
 }
 
 export async function hasAdapter(
@@ -190,6 +202,31 @@ function filteredMap(
   return { version: 1, sources };
 }
 
+type SiteStyle = { href: string; content: Buffer };
+
+/**
+ * Reads every declared site-wide stylesheet before anything is written, so a
+ * path that cannot be read ends the build with no output directory written.
+ */
+async function readStyles(
+  root: string,
+  styles: readonly string[] | undefined,
+): Promise<SiteStyle[]> {
+  const result: SiteStyle[] = [];
+  for (const stylePath of styles ?? []) {
+    const resolved = resolve(root, stylePath);
+    let content: Buffer;
+    try {
+      content = await readFile(resolved);
+    } catch {
+      throw new Error(`Site-wide stylesheet '${stylePath}' could not be read.`);
+    }
+    const relativePath = relative(root, resolved).replaceAll("\\", "/");
+    result.push({ href: `/assets/styles/${relativePath}`, content });
+  }
+  return result;
+}
+
 export async function buildAdapterConfig(
   root: string,
   siteRoot: string,
@@ -199,6 +236,8 @@ export async function buildAdapterConfig(
 ): Promise<void> {
   for (const route of config.routes) assertRoute(route);
   assertUniquePaths(config.routes);
+  const styles = await readStyles(root, config.styles);
+  const styleHrefs = styles.map((style) => style.href);
   const temporary = join(siteRoot, `.szd-tmp-${process.pid}`);
   await rm(temporary, { recursive: true, force: true });
   await mkdir(temporary, { recursive: true });
@@ -216,7 +255,7 @@ export async function buildAdapterConfig(
       await mkdir(dirname(entryFile), { recursive: true });
       await writeFile(
         entryFile,
-        html(route, siteRoot, filteredMap(route, runtimeSourceMap)),
+        html(route, siteRoot, styleHrefs, filteredMap(route, runtimeSourceMap)),
         "utf8",
       );
       input[output.replaceAll("/", "_").replace(/\.html$/, "")] = entryFile;
@@ -237,6 +276,11 @@ export async function buildAdapterConfig(
       });
     }
     await rm(emitted, { recursive: true, force: true });
+    for (const style of styles) {
+      const target = join(outDir, ...style.href.split("/").filter(Boolean));
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, style.content);
+    }
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

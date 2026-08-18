@@ -116,6 +116,26 @@ export default defineLandingPage({
 });
 ```
 
+A configuration may also declare `styles`, repository-relative CSS files that
+belong to the site rather than to any one route. Each is linked in the head of
+every custom-adapter document — entry and body routes alike — in declaration
+order, ahead of a body route's own `stylesheet`, so a route's own CSS overrides
+the site-wide rules and never the reverse. No route opts out and no route adds
+one of its own.
+
+```ts
+export default defineLandingPage({
+  styles: ["site/base.css", "site/type.css"],
+  routes: [
+    {
+      path: "/",
+      entry: "src/main.ts",
+      metadata: { title: "Home", description: "Home page" },
+    },
+  ],
+});
+```
+
 ## Development
 
 ```powershell
