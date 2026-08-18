@@ -173,6 +173,37 @@ describe("LandingPageData", () => {
 
   it.each([
     [
+      "a route declaring hydrate",
+      {
+        version: 1,
+        kind: "adapter",
+        routes: [
+          {
+            path: "/",
+            entry: "src/main.ts",
+            metadata,
+            hydrate: true,
+          },
+        ],
+      },
+      "unknown field 'hydrate'",
+    ],
+    [
+      "route metadata declaring repositoryUrl",
+      {
+        version: 1,
+        kind: "adapter",
+        routes: [
+          {
+            path: "/",
+            body: "<main>Home</main>",
+            metadata: { ...metadata, repositoryUrl: "https://example.test/" },
+          },
+        ],
+      },
+      "unknown field 'repositoryUrl'",
+    ],
+    [
       "an unsupported version",
       {
         version: 2,

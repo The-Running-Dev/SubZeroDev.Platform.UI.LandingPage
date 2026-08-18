@@ -98,8 +98,7 @@ Both rules apply identically to a `defineLandingPage` configuration and to a
 `LandingPageData` model.
 
 An `entry` route names a module, and its document is the toolkit shell —
-`<div id="root"></div>` plus a module script — with `hydrate` available for a
-server-rendered mount. A `body` route supplies the document body itself; that
+`<div id="root"></div>` plus a module script. A `body` route supplies the document body itself; that
 markup is emitted verbatim, no script is emitted, and the built page loads
 nothing. A `body` route may also declare a `stylesheet`, which is emitted as a
 `<style>` element in the head, since `<style>` is not valid in the body.

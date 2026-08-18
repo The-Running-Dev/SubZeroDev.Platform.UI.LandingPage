@@ -30,7 +30,6 @@ export type LandingPageMetadata = {
   title: string;
   description: string;
   canonicalUrl?: string;
-  repositoryUrl?: string;
   socialImageUrl?: string;
   openGraph?: LandingPageOpenGraphMetadata;
   twitter?: LandingPageTwitterMetadata;
@@ -44,7 +43,6 @@ export type LandingPageEntryRoute = {
   path: "/" | `/${string}/`;
   entry: string;
   metadata: LandingPageMetadata;
-  hydrate?: boolean;
   dataSourceIds?: readonly string[];
 };
 

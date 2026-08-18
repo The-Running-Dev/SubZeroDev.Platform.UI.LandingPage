@@ -98,7 +98,6 @@ function metadata(value: unknown, label: string): LandingPageMetadata {
       "title",
       "description",
       "canonicalUrl",
-      "repositoryUrl",
       "socialImageUrl",
       "openGraph",
       "twitter",
@@ -114,7 +113,6 @@ function metadata(value: unknown, label: string): LandingPageMetadata {
     );
   for (const field of [
     "canonicalUrl",
-    "repositoryUrl",
     "socialImageUrl",
     "themeColor",
     "noScript",
@@ -180,15 +178,7 @@ function route(value: unknown, index: number): LandingPageDataRoute {
   const item = record(value, `routes[${index}]`);
   keys(
     item,
-    [
-      "path",
-      "entry",
-      "body",
-      "stylesheet",
-      "metadata",
-      "hydrate",
-      "dataSourceIds",
-    ],
+    ["path", "entry", "body", "stylesheet", "metadata", "dataSourceIds"],
     `routes[${index}]`,
   );
   const result = {
@@ -212,10 +202,6 @@ function route(value: unknown, index: number): LandingPageDataRoute {
   if (item.stylesheet !== undefined && typeof item.stylesheet !== "string")
     throw new Error(
       `LandingPageData routes[${index}].stylesheet must be a string.`,
-    );
-  if (item.hydrate !== undefined && typeof item.hydrate !== "boolean")
-    throw new Error(
-      `LandingPageData routes[${index}].hydrate must be a boolean.`,
     );
   assertRoute(result);
   if (
