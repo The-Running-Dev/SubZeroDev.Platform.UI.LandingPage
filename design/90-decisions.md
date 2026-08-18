@@ -360,3 +360,42 @@ that were nowhere written down; replacing the target's content wholesale with
 the kit's `AGENTS.md` — the project-identity paragraph and its two house
 rules are real, repository-specific content with no kit equivalent.
 Reversibility: cheap — a documentation file, not a public interface.
+
+### 2026-08-18 — This repository dogfoods its own package as a caller; Docusaurus added to `docs/`
+
+Context: the repository had no self-hosted landing page or documentation
+site of its own, unlike `SubZeroDev.GameEngine`, which uses this package as a
+consumer for both. Setting one up needed a documentation-site generator for
+`docs/` (fed by `/make-human-docs`'s `guide.md`, previously written to the
+repository root with nowhere to be hosted) and a way to build/deploy this
+repository's own `README.md`-driven landing page without changing the
+package's public interface.
+Chosen: (1) the package's own generic README/CHANGELOG mode, invoked via
+`npx` against the last-published version, exactly as any external consumer
+would — this repository is a CLI tool with no product UI to justify a custom
+`site/landing.config.ts` adapter, unlike GameEngine. (2) `docs/` as a
+standalone Docusaurus project with its own `package.json`
+(`@docusaurus/core`, `@docusaurus/preset-classic`), built and deployed by a
+new caller-owned workflow (`.github/workflows/pages.yml`) that merges the
+docs build with the landing build via the package's existing `merge` CLI
+command. (3) `CHANGELOG.md` is generated fresh on every deploy by the
+package's own `generate-changelog` command and never committed.
+Rejected: **GameEngine's docs pattern verbatim** — a private base container
+image (`ghcr.io/the-running-dev/docs-template`) with Docusaurus and
+PowerShell scripts baked in, and a `docs-deploy.yml` built around that image.
+This repository has no PowerShell or Docker tooling today; adopting that
+image would be a materially larger infrastructure decision (standing up or
+depending on a shared private image) than "add a docs generator," and is out
+of scope for this task. **Reusing `.github/workflows/deploy-pages.yml`
+as-is** — its `build`/`merge` steps run inside a fresh job checkout that
+never sees a `CHANGELOG.md` generated in a prior job, so it cannot be used
+without either committing a stale changelog or modifying the reusable
+workflow's contract; a new single-job caller workflow avoids both.
+**Hand-authoring `CHANGELOG.md`** instead of generating it — duplicates what
+`git log` already holds and goes stale, which is the exact failure the
+package's own `generate-changelog` command exists to prevent.
+Reversibility: moderate. The Docusaurus dependency and the new workflow are
+additive and repo-local; removing them is cheap. The `docs/` directory now
+means something different (a Docusaurus project, not two loose reference
+files) — reverting that shape change means moving files back and fixing the
+one relative link in `README.md` that changed with them.

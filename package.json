@@ -14,7 +14,7 @@
     "dist",
     "action.yml",
     ".github/workflows/deploy-pages.yml",
-    "docs",
+    "docs/docs",
     "README.md",
     "LICENSE"
   ],

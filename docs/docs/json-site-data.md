@@ -1,3 +1,7 @@
+---
+sidebar_position: 4
+---
+
 # JSON-backed site data
 
 `subzerodev-platform-ui-landing-page@0.4.0` can build a site from a versioned

@@ -4,3 +4,17 @@ site/dist/
 coverage/
 .szd-tmp-*/
 *.tgz
+
+# Generated fresh on every self-hosted deploy by `generate-changelog` — see
+# .github/workflows/pages.yml. Never committed, same as GameEngine's own
+# CHANGELOG generation.
+/CHANGELOG.md
+
+# The docs/ Docusaurus project's generated output. Repeated from
+# docs/.gitignore because git is not the only reader: prettier defaults its
+# --ignore-path to the *root* .gitignore and .prettierignore, and eslint's
+# flat config defaults to ignoring only node_modules — neither descends into
+# a nested .gitignore, so without these `npm run check` fails on generated
+# files the moment anyone builds the docs site.
+docs/build/
+docs/.docusaurus/

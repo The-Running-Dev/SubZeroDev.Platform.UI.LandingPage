@@ -167,7 +167,7 @@ each route's entry module, or pasted into every body route's own stylesheet, and
 a page composed entirely at build time has no way to get them at all.
 
 Touches: `src/index.ts`, `src/data.ts`, `src/adapter.ts`, `README.md`,
-`docs/json-site-data.md`, `test/adapter.test.ts`, `test/index.test.ts`
+`docs/docs/json-site-data.md`, `test/adapter.test.ts`, `test/index.test.ts`
 
 Depends on: none. Ordered after UI5 only because both edit the head builder, and
 UI5 is the smaller change.

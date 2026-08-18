@@ -1,0 +1,51 @@
+{
+  "gates": [
+    {
+      "name": "npm run format:check",
+      "status": "Passed",
+      "detail": "prettier --check . — All matched files use Prettier code style!"
+    },
+    {
+      "name": "npm run lint",
+      "status": "DidNotRun",
+      "reason": "eslint . fails for two independent reasons, and only one of them is environmental. (1) 'No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present' parsing errors naming this repo root and .claude/worktrees/inspiring-jemison-f70809 as the two candidates — that worktree is a separate, concurrently running background session (the spawned inferRepository fix, PR #27 base) checked out under .claude/worktrees/ inside this same clone, and its own tsconfig.json is confusing typescript-eslint's project-service auto-detection. That part is a collision between two concurrent worktrees, not this branch's diff. (2) This branch's own defect: eslint's flat config ignores only node_modules by default and never reads a .gitignore, so once docs/ is built, eslint . also lints docs/build/ and docs/.docusaurus/ generated output — 22 of the 109 errors observed, plus 972 when those two directories are linted directly. Fixed on this branch by an ignores entry in eslint.config.js (and matching root .gitignore entries for prettier, whose --ignore-path likewise defaults to the root .gitignore only). Removing the other worktree alone would NOT have made this gate pass."
+    },
+    {
+      "name": "npm run typecheck",
+      "status": "Passed",
+      "detail": "tsc --noEmit completed with no output and exit 0."
+    },
+    {
+      "name": "npm run build",
+      "status": "Passed",
+      "detail": "tsc -p tsconfig.json completed with no output and exit 0."
+    },
+    {
+      "name": "npm test",
+      "status": "Passed",
+      "detail": "vitest run — Test Files 17 passed (17), Tests 135 passed (135)."
+    },
+    {
+      "name": "npm run pack:check",
+      "status": "Passed",
+      "detail": "npm pack --dry-run — 31 files, package size 28.4 kB, unpacked 100.4 kB. docs/docs/*.md present in the tarball; no Docusaurus tooling (docusaurus.config.ts, docs/package.json, sidebar.ts, src/) included, confirming the package.json files narrowing from docs to docs/docs."
+    },
+    {
+      "name": "git diff --check",
+      "status": "Passed",
+      "detail": "No output, exit 0 — no whitespace errors."
+    },
+    {
+      "name": "docs (Docusaurus) build",
+      "status": "Passed",
+      "detail": "npm run build inside docs/ — [SUCCESS] Generated static files in \"build\". Verified separately (not part of npm run check, which only covers the package root)."
+    },
+    {
+      "name": "Self-hosted landing+docs merge, end to end",
+      "status": "Passed",
+      "detail": "node dist/cli.js generate-changelog --repository ... && build --docs-url /docs/ --repository-url ... && merge --docs-output docs/build all completed with no errors. docs/build/index.html is the generic-mode landing page with working /changelog/, /docs/, and Repository nav links; docs/build/docs/{guide,json-site-data,css-contract,index} survived the merge's fingerprint check untouched. Verified manually; not part of any automated gate."
+    }
+  ],
+  "discoveredCiGates": [],
+  "discoveryNote": "No .github/workflows/*.yml step in this repository carries a '# verification: true' comment, so zero CI-flagged gates were discovered by the documented convention. .github/workflows/pages.yml (new, this branch) and .github/workflows/deploy-pages.yml are both deploy workflows with no flagged verify step. All entries above are this repository's optional, non-CI-gated checks (package.json scripts, plus manual checks specific to this branch's new docs/ project and pages.yml)."
+}
