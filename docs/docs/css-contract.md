@@ -1,3 +1,7 @@
+---
+sidebar_position: 3
+---
+
 # Generic CSS and DOM contract
 
 The generic renderer owns only selectors beginning `.szd-` and custom
