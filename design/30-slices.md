@@ -195,3 +195,110 @@ Out of scope: extending `styles` to the generic shell, whose CSS is the theme
 file that form already owns; accepting inline CSS strings rather than paths; and
 a per-route stylesheet link on an entry route, which the 2026-08-05 decision
 rejected because an entry route's CSS already travels through its module graph.
+
+### UI8 — A site brings its own build steps
+
+Delivers: for a consumer whose landing site is a React application, a
+development server where editing a component updates the page in place instead
+of reloading the whole thing — and, past that one case, the ability to bring any
+build step the site needs to a build the package otherwise configures entirely.
+Today adopting the package means giving those up: the site has no way to declare
+them, so a consumer either loses them or keeps the duplicated configuration file
+that adopting the package was meant to delete.
+
+Touches: `src/index.ts`, `src/adapter.ts`, `src/data.ts`, `README.md`,
+`test/adapter.test.ts`, `test/index.test.ts`
+
+Depends on: none
+
+Ordered first of the two because it carries the design's least certain bet: that
+a consumer plugin can be given real configuration authority while the dev
+server's filesystem sandbox stays package-owned, with a refusal a consumer can
+act on rather than a silent re-narrowing.
+
+Acceptance:
+
+- UI8.1 An adapter configuration declaring a plugin whose `transform` replaces a
+  marker string in an entry module produces built output containing the
+  replacement, not the marker — the declared plugin ran during `build`.
+- UI8.2 The same configuration's dev server serves that entry module with the
+  same replacement applied — one declared list reaches both calls.
+- UI8.3 A configuration declaring no plugins, and one declaring `plugins: []`,
+  produce generated documents byte-identical to what the same configuration
+  produced before, with unchanged `/`-relative entry paths, `publicDir` staging
+  and site-wide stylesheet links.
+- UI8.4 With a consumer plugin declaring its own `configureServer` middleware,
+  the adapter's route middleware still answers `/` and a declared route path —
+  the package's plugin keeps its position ahead of it, and two declared consumer
+  plugins appear after the package's own in declaration order.
+- UI8.5 A consumer plugin whose `config` hook returns
+  `server: { fs: { allow: ["/etc"] } }` ends the dev run with a message naming
+  `/etc`, and no server begins listening.
+- UI8.6 With no plugin widening it, the started dev server's resolved
+  `server.fs.allow` is exactly the site root plus each resolved `allow` entry,
+  and nothing else.
+- UI8.7 A `kind: "adapter"` JSON model declaring `plugins` is rejected as an
+  unknown field, and the message names `plugins`.
+- UI8.8 A site whose root holds a `vite.config.ts` that throws when it is
+  evaluated still builds and still starts its dev server while declaring plugins
+  — `configFile: false` holds unconditionally.
+- UI8.9 `README.md` states that a declared plugin reaches both `build` and `dev`,
+  and that the static-head, route-path and output-layout guarantees hold only for
+  a site that declares none.
+
+Out of scope: a plugin field on `AdapterLandingPageData` or any other JSON model
+surface, which the 2026-08-19 decision rejected as remote code selection rather
+than deferred; separate `buildPlugins`/`devPlugins` lists, rejected in the same
+entry; accepting a consumer `configFile`; and generic mode, which has no consumer
+entry module for a plugin to transform.
+
+### UI9 — Look at the built site before shipping it
+
+Delivers: for anyone about to trust the package with a site they already have, a
+way to open the finished pages in a browser and check them — the real built
+output, with its generated pages, fingerprinted asset names and copied public
+files, rather than the development server's approximation of them. Today only
+sites using the package's own built-in page style can be served that way; a site
+with its own layout has to reinstall the very build tooling that adopting the
+package removed.
+
+Touches: `src/cli.ts`, a new module holding the shared static server,
+`README.md`, `test/` (a new test module for the server, alongside the existing
+CLI coverage)
+
+Depends on: none. Ordered after UI8 only because UI8 carries the riskier bet;
+neither slice touches the other's files.
+
+Acceptance:
+
+- UI9.1 `preview` on a custom-adapter site serves the built tree: `GET /` returns
+  the home route's document, and `GET /roadmap` and `GET /roadmap/` both return
+  the `roadmap` route's document.
+- UI9.2 A 200 response carries a `Content-Type` derived from the file's
+  extension: `.js` a JavaScript media type a browser executes as a module, `.css`
+  `text/css`, `.html` `text/html`, and an extension the mapping does not name
+  still carries a header rather than none. The built adapter site's home document
+  loads and executes its module script when served this way.
+- UI9.3 `GET /../package.json` and `GET /%2e%2e/package.json` each answer 404,
+  and neither response body contains a filesystem path.
+- UI9.4 `GET /index.html?v=1` and `GET /#top` return the home document — neither
+  the query nor the fragment reaches the filename.
+- UI9.5 `preview --out-dir <dir> --port <n>` serves `<dir>` on `<n>`. Passing
+  `--adapter` naming a module that does not exist changes nothing about what is
+  served, because `preview` reads no adapter module and no source map.
+- UI9.6 `preview` on a generic-mode site serves its built tree by the same rules,
+  and the two modes differ only in what `build` wrote.
+- UI9.7 Generic `dev` serves through that same implementation, so on that path
+  `/roadmap` without a trailing slash now resolves, `?v=1` no longer 404s, and
+  every 200 carries a `Content-Type` — and generic `dev` and the adapter dev
+  server now agree about a route URL without a trailing slash.
+- UI9.8 `preview` builds before serving: with `outDir` deleted beforehand it
+  still serves, and with a source edit made after the last build the served
+  document carries the edit.
+- UI9.9 `README.md` documents `preview` alongside `dev`, `build`, `check` and
+  `merge`, and states that it builds first.
+
+Out of scope: resolving input mode in `preview`, and any `--no-build` or
+absent-`outDir` path — the 2026-08-19 decisions rejected both. A second server
+implementation for adapter mode. Changing the adapter dev server, whose own
+route middleware is unaffected; only generic `dev`'s static serving moves.
