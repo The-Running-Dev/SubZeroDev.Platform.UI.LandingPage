@@ -4,3 +4,8 @@ site/dist/
 coverage/
 .szd-tmp-*/
 *.tgz
+
+# Generated fresh on every self-hosted deploy by `generate-changelog` — see
+# .github/workflows/pages.yml. Never committed, same as GameEngine's own
+# CHANGELOG generation.
+/CHANGELOG.md
