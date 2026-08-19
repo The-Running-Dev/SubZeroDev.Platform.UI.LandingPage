@@ -1,44 +1,49 @@
 {
   "gates": [
     {
-      "name": "prettier --check . (npm run format:check)",
+      "name": "npm run format:check (prettier --check .)",
       "status": "Passed",
-      "detail": "Checking formatting... All matched files use Prettier code style!"
+      "detail": "Checking formatting...\nAll matched files use Prettier code style!"
     },
     {
-      "name": "eslint . (npm run lint)",
+      "name": "npm run lint (eslint .)",
       "status": "Passed",
-      "detail": "No output; eslint exited 0."
+      "detail": "eslint . completed with no output and exit 0."
     },
     {
-      "name": "tsc --noEmit (npm run typecheck)",
+      "name": "npm run typecheck (tsc --noEmit)",
       "status": "Passed",
-      "detail": "No output; tsc exited 0."
+      "detail": "tsc --noEmit completed with no output and exit 0."
     },
     {
-      "name": "tsc -p tsconfig.json (npm run build)",
+      "name": "npm run build (tsc -p tsconfig.json)",
       "status": "Passed",
-      "detail": "No output; tsc exited 0, dist/cli.js chmod to 0o755 succeeded."
+      "detail": "tsc -p tsconfig.json completed with no output and exit 0; dist/cli.js chmod succeeded."
     },
     {
-      "name": "vitest run (npm test)",
-      "status": "Failed",
-      "detail": "Test Files 1 failed | 9 passed (10); Tests 1 failed | 109 passed (110). FAIL test/preview.test.ts > preview command > builds first, then serves --out-dir on --port, ignoring an --adapter and a --source-map that would each change what is built (UI9.5, UI9.8): Error: Test timed out in 20000ms. Reproduced identically across two independent full-suite runs this session (once via `npx vitest run`, once inside `npm run check`), both times the same test, same 20s timeout. Run in isolation (`npx vitest run test/preview.test.ts -t \"builds first, then serves\"`), it passes in ~17s. The test spawns a real child process running the CLI through tsx; under full-suite parallel load it appears to miss its 20s window. None of this slice's changes touch src/cli.ts, the preview command, or how it spawns — every new test this slice added (in test/adapter.test.ts, test/generic.test.ts, test/preview.test.ts) passed in both full runs."
+      "name": "npm test (vitest run)",
+      "status": "Passed",
+      "detail": "Test Files  10 passed (10)\nTests  111 passed (111)\nDuration  78.24s"
     },
     {
-      "name": "npm pack --dry-run (npm run pack:check)",
+      "name": "npm run pack:check (npm pack --dry-run)",
       "status": "Passed",
-      "detail": "npm notice Tarball Details name: subzerodev-platform-ui-landing-page version: 0.5.0 total files: 33, package size 38.0 kB, unpacked size 131.1 kB. Exited 0."
+      "detail": "npm pack --dry-run built the tarball successfully: subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, package size 39.0 kB."
+    },
+    {
+      "name": "PowerShell parse-check (*.ps1 under tools/)",
+      "status": "Passed",
+      "detail": "[System.Management.Automation.Language.Parser]::ParseFile against all 18 tools/*.ps1 files: All 18 ps1 files parsed cleanly."
+    },
+    {
+      "name": "Pester tests (Invoke-Pester -Path tools)",
+      "status": "Passed",
+      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru: Failed 0, FailedBlocks 0, FailedContainers 0. All tests green."
     },
     {
       "name": "git diff --check",
       "status": "Passed",
-      "detail": "No output; git diff --check exited 0, no whitespace errors."
-    },
-    {
-      "name": "tools/*.Tests.ps1 (Invoke-Pester -Path tools)",
-      "status": "Passed",
-      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru — Tests Passed: 113, Failed: 0, Skipped: 0, NotRun: 0, Result: Passed, Duration 00:03:09.38."
+      "detail": "git diff --check exited 0 with no output; no whitespace errors."
     }
   ]
 }
