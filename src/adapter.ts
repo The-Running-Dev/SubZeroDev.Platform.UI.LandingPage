@@ -4,23 +4,18 @@ import {
   mkdir,
   readFile,
   readdir,
+  realpath,
   rm,
   writeFile,
 } from "node:fs/promises";
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-} from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build as viteBuild, createServer, type PluginOption } from "vite";
 import { tsImport } from "tsx/esm/api";
 import type { LandingPageConfig, LandingPageDataConfig } from "./index.js";
 import type { SourceMap } from "subzerodev-data-json";
 import { assertRoute, assertUniquePaths, isBodyRoute } from "./route.js";
+import { assertWithinOrThrow, assertWithinResolved } from "./paths.js";
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -227,17 +222,29 @@ async function readStyles(
   styles: readonly string[] | undefined,
 ): Promise<SiteStyle[]> {
   const result: SiteStyle[] = [];
-  for (const stylePath of styles ?? []) {
+  if (!styles?.length) return result;
+  // Resolved once per call rather than once per declared stylesheet — `root`
+  // is invariant across the whole loop, including across the many calls this
+  // makes per request under `dev`.
+  const realRoot = await realpath(root);
+  for (const stylePath of styles) {
     const resolved = resolve(root, stylePath);
-    const relativePath = relative(root, resolved).replaceAll("\\", "/");
-    if (
-      relativePath === ".." ||
-      relativePath.startsWith("../") ||
-      isAbsolute(relativePath)
-    )
-      throw new Error(
+    // Checked before reading, when the path exists, so a stylesheet outside
+    // the root is refused without buffering its content into memory first.
+    // Left unchecked when the path doesn't exist (e.g. a dangling symlink) so
+    // that case reaches the read below and reports as unreadable, not as an
+    // escape.
+    if (await exists(resolved)) {
+      await assertWithinOrThrow(
+        () =>
+          assertWithinResolved(
+            realRoot,
+            resolved,
+            `Site-wide stylesheet '${stylePath}'`,
+          ),
         `Site-wide stylesheet '${stylePath}' resolves outside the repository root.`,
       );
+    }
     let content: Buffer;
     try {
       content = await readFile(resolved);
@@ -249,6 +256,7 @@ async function readStyles(
         },
       );
     }
+    const relativePath = relative(root, resolved).replaceAll("\\", "/");
     const href = `/assets/styles/${relativePath
       .split("/")
       .map((segment) => encodeURIComponent(segment))
@@ -482,6 +490,12 @@ export async function devAdapter(
 ): Promise<import("vite").ViteDevServer> {
   const adapterPath = resolve(root, adapter);
   const config = resolved ?? (await loadAdapter(adapterPath));
+  // `loadAdapter` already validates a freshly-loaded config's routes
+  // (`assertRoute`, but not `assertUniquePaths`); a `resolved` config was
+  // composed elsewhere and has been validated by neither, so both run here —
+  // the site `dev` serves must reject exactly what `build` would.
+  if (resolved) for (const route of resolved.routes) assertRoute(route);
+  assertUniquePaths(config.routes);
   const siteRoot = dirname(adapterPath);
   const allowed = [
     siteRoot,
@@ -512,6 +526,7 @@ export async function devAdapter(
               .pathname;
             try {
               const current = resolved ?? (await loadAdapter(adapterPath));
+              if (!resolved) assertUniquePaths(current.routes);
               const styles = await readStyles(root, current.styles);
               // Answered from the bytes `readStyles` already read and
               // contained, so a declared stylesheet outside the site root

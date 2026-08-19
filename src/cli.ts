@@ -391,6 +391,11 @@ type Mode =
   | { kind: "adapter-plain"; adapterPath: string }
   | { kind: "generic-plain" };
 
+/** Forces every `Mode.kind` dispatch to be guarded explicitly, not fallen into. */
+function assertNever(value: never): never {
+  throw new Error(`Unhandled Mode: ${JSON.stringify(value)}`);
+}
+
 /**
  * The sole call site for `hasAdapter` and `hasSourceMap` in this file (UI10.10)
  * — `build` and `dev` each call this instead of holding a resolution of their
@@ -459,7 +464,28 @@ async function build(
     await buildAdapter(root, mode.adapterPath, outDir);
     return;
   }
-  await buildGeneric({ ...options, outDir });
+  if (mode.kind === "generic-plain") {
+    await buildGeneric({ ...options, outDir });
+    return;
+  }
+  assertNever(mode);
+}
+
+/**
+ * Clears `outDir`, runs `build`, then serves it — the sequence both
+ * generic-family branches of `dev` share (map-selected and plain), so the two
+ * can't diverge on when the output directory is cleared. Cleared only here,
+ * on the branch that writes it back: an adapter-family site is served by Vite
+ * and writes nothing to `outDir`, so emptying it there would destroy it and
+ * leave nothing there.
+ */
+async function serveGeneric(
+  outDir: string,
+  buildSite: () => Promise<void>,
+): Promise<void> {
+  await rm(outDir, { recursive: true, force: true });
+  await buildSite();
+  serve(outDir);
 }
 
 /**
@@ -547,12 +573,9 @@ async function main(): Promise<void> {
     if (mode.kind === "map") {
       const { data, runtimeMap } = await resolveJsonSite(mode.sourceMapPath);
       if (data.kind === "generic") {
-        // Cleared only on the branch that writes it back. An adapter-family
-        // site is served by Vite and writes nothing here, so emptying the
-        // build's output directory would destroy it and leave nothing there.
-        await rm(options.outDir, { recursive: true, force: true });
-        await buildGenericData(root, options.outDir, data);
-        serve(options.outDir);
+        await serveGeneric(options.outDir, () =>
+          buildGenericData(root, options.outDir, data),
+        );
         return;
       }
       // Served with `mode.sourceMapPath` standing in for the site root, exactly
@@ -571,10 +594,11 @@ async function main(): Promise<void> {
       await devAdapter(root, mode.adapterPath);
       return;
     }
-    await rm(options.outDir, { recursive: true, force: true });
-    await buildGeneric(options);
-    serve(options.outDir);
-    return;
+    if (mode.kind === "generic-plain") {
+      await serveGeneric(options.outDir, () => buildGeneric(options));
+      return;
+    }
+    assertNever(mode);
   }
   if (command === "preview") {
     await build(options.outDir, { sourceMapWasGiven: false });

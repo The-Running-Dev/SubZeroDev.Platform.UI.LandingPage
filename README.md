@@ -147,6 +147,11 @@ order, ahead of a body route's own `stylesheet`, so a route's own CSS overrides
 the site-wide rules and never the reverse. No route opts out and no route adds
 one of its own.
 
+A declared stylesheet, or a local Markdown asset in a generic build, that
+resolves outside the repository root — including through a symbolic link — is
+refused, ending the build and naming the declared path rather than publishing
+the file.
+
 ```ts
 export default defineLandingPage({
   styles: ["site/base.css", "site/type.css"],

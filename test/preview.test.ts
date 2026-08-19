@@ -1,5 +1,12 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { request as httpRequest, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -153,6 +160,41 @@ describe("static server: resolution and containment", () => {
     expect(encoded.status).toBe(404);
     expect(encoded.body).not.toContain(root);
     expect(encoded.body).not.toContain("leak");
+  });
+
+  it("404s a request for a file inside outDir that is a symbolic link to a file outside it, leaking no filesystem path (UI11.4)", async () => {
+    const root = await fixtureRoot();
+    const outDir = await plainOutDir(root);
+    await symlink(
+      join(root, "secret.json"),
+      join(outDir, "linked-secret.json"),
+    );
+    const base = await listen(outDir);
+
+    const response = await rawGet(base, "/linked-secret.json");
+    expect(response.status).toBe(404);
+    expect(response.body).not.toContain(root);
+    expect(response.body).not.toContain("leak");
+  });
+
+  it("does not throw or answer 500 for a request naming a path that does not exist (UI11.5)", async () => {
+    const root = await fixtureRoot();
+    const outDir = await plainOutDir(root);
+    const base = await listen(outDir);
+
+    const response = await rawGet(base, "/does/not/exist.html");
+    expect(response.status).toBe(404);
+  });
+
+  it("serves a file reached through a symbolic link that stays inside outDir (UI11.6)", async () => {
+    const root = await fixtureRoot();
+    const outDir = await plainOutDir(root);
+    await symlink(join(outDir, "assets", "app.js"), join(outDir, "linked.js"));
+    const base = await listen(outDir);
+
+    const response = await rawGet(base, "/linked.js");
+    expect(response.status).toBe(200);
+    expect(response.body).toBe("console.log('js')");
   });
 
   it("resolves '/index.html?v=1' and '/#top' to the home document — the query and fragment never reach the filename (UI9.4)", async () => {

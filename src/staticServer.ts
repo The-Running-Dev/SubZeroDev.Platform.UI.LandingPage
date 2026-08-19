@@ -1,6 +1,8 @@
+import { realpathSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { join, resolve, sep } from "node:path";
+import { assertWithinResolved } from "./paths.js";
 
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
@@ -31,9 +33,11 @@ function contentTypeFor(path: string): string {
 }
 
 /**
- * Resolves a request pathname to a path inside `root`, or `undefined` when it
- * decodes to something outside it. Percent-decoded once before resolution, so
- * a `..` segment — literal or percent-escaped — can never escape `root`.
+ * Resolves a request pathname to a candidate path under `root`, or `undefined`
+ * when it decodes to something lexically outside it. Percent-decoded once
+ * before resolution, so a `..` segment — literal or percent-escaped — can
+ * never escape `root` lexically; containment against a symlinked candidate is
+ * decided separately by `resolveTarget`, through `assertWithinResolved`.
  */
 function resolveWithinRoot(root: string, pathname: string): string | undefined {
   let decoded: string;
@@ -48,15 +52,34 @@ function resolveWithinRoot(root: string, pathname: string): string | undefined {
   return target;
 }
 
+/**
+ * Resolves a request pathname to a path inside `root`, or `undefined` when the
+ * candidate — after any directory-index rewrite — cannot be read (it does not
+ * exist) or resolves outside `root` through a symlink. `realRoot` is `root`
+ * already resolved through `realpath` once for the server's lifetime, so this
+ * doesn't re-resolve it on every request. `assertWithinResolved` decides
+ * symlink containment for every case; nothing here compares paths itself
+ * (**C33**).
+ */
 async function resolveTarget(
   root: string,
+  realRoot: string,
   pathname: string,
 ): Promise<string | undefined> {
-  const target = resolveWithinRoot(root, pathname);
-  if (!target) return undefined;
-  if (pathname.endsWith("/")) return join(target, "index.html");
-  const stats = await stat(target).catch(() => undefined);
-  if (stats?.isDirectory()) return join(target, "index.html");
+  const candidate = resolveWithinRoot(root, pathname);
+  if (!candidate) return undefined;
+  let target = candidate;
+  if (pathname.endsWith("/")) {
+    target = join(candidate, "index.html");
+  } else {
+    const stats = await stat(candidate).catch(() => undefined);
+    if (stats?.isDirectory()) target = join(candidate, "index.html");
+  }
+  try {
+    await assertWithinResolved(realRoot, target, "Requested path");
+  } catch {
+    return undefined;
+  }
   return target;
 }
 
@@ -84,9 +107,14 @@ function pathnameOf(requestTarget: string | undefined): string {
  */
 export function createStaticServer(outDir: string): Server {
   const root = resolve(outDir);
+  const realRoot = realpathSync(root);
   return createServer((request, response) => {
     void (async () => {
-      const target = await resolveTarget(root, pathnameOf(request.url));
+      const target = await resolveTarget(
+        root,
+        realRoot,
+        pathnameOf(request.url),
+      );
       const data = target
         ? await readFile(target).catch(() => undefined)
         : undefined;

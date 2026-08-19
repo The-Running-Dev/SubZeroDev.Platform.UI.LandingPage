@@ -5,11 +5,13 @@ import {
   readdir,
   realpath,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { LandingPageConfig } from "../src/index.js";
 import {
   buildAdapter,
   buildAdapterConfig,
@@ -408,6 +410,127 @@ describe("custom adapter", () => {
       buildAdapter(root, "site/landing.config.ts", outDir),
     ).rejects.toThrow("site/missing.css");
     await expect(readdir(outDir)).rejects.toThrow();
+  });
+
+  it("rejects a declared stylesheet resolving outside the repository root through a symbolic link, writing no output (UI11.1)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    await writeFile(join(root, "outside.css"), "body{}", "utf8");
+    const site = join(root, "repo", "site");
+    await mkdir(site, { recursive: true });
+    await symlink(join(root, "outside.css"), join(site, "linked.css"));
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { styles: ["site/linked.css"], routes: [{ path: "/", body: "<p>page</p>", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    const outDir = join(site, "dist");
+    await expect(
+      buildAdapter(join(root, "repo"), "site/landing.config.ts", outDir),
+    ).rejects.toThrow("site/linked.css");
+    await expect(readdir(outDir)).rejects.toThrow();
+  });
+
+  it("ends the build with the unreadable-stylesheet message for a dangling symlink, not a resolution failure (UI11.2)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(site, { recursive: true });
+    await symlink(join(site, "does-not-exist.css"), join(site, "dangling.css"));
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { styles: ["site/dangling.css"], routes: [{ path: "/", body: "<p>page</p>", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    const outDir = join(site, "dist");
+    await expect(
+      buildAdapter(root, "site/landing.config.ts", outDir),
+    ).rejects.toThrow("site/dangling.css");
+    await expect(readdir(outDir)).rejects.toThrow();
+  });
+
+  it("accepts a declared stylesheet reached through a symbolic link that stays inside the repository root (UI11.6)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "styles"), { recursive: true });
+    await writeFile(join(site, "styles", "real.css"), "body{}", "utf8");
+    await symlink(join(site, "styles", "real.css"), join(site, "linked.css"));
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { styles: ["site/linked.css"], routes: [{ path: "/", body: "<p>page</p>", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    const outDir = join(site, "dist");
+    await buildAdapter(root, "site/landing.config.ts", outDir);
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).toContain(
+      '<link rel="stylesheet" href="/assets/styles/site/linked.css">',
+    );
+  });
+
+  it("still refuses an absolute stylesheet path and one relative to exactly '..' (UI11.8)", async () => {
+    const outsideRoot = await mkdtemp(join(tmpdir(), "szd-adapter-outside-"));
+    roots.push(outsideRoot);
+    const absoluteTarget = join(outsideRoot, "outside.css");
+    await writeFile(absoluteTarget, "body{}", "utf8");
+
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(site, { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { styles: [${JSON.stringify(absoluteTarget)}], routes: [{ path: "/", body: "<p>page</p>", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await expect(
+      buildAdapter(root, "site/landing.config.ts", join(site, "dist")),
+    ).rejects.toThrow("resolves outside the repository root");
+
+    const site2 = join(root, "site2");
+    await mkdir(site2, { recursive: true });
+    await writeFile(
+      join(site2, "landing.config.ts"),
+      `export default { styles: [".."], routes: [{ path: "/", body: "<p>page</p>", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    // Asserted on message, not just rejection: `resolve(root, "..")` is a real,
+    // readable directory, so a check that only ran after an unconditional read
+    // would instead fail here with "could not be read" — this pins the
+    // containment check, specifically, as what rejects this case.
+    await expect(
+      buildAdapter(root, "site2/landing.config.ts", join(site2, "dist")),
+    ).rejects.toThrow("resolves outside the repository root");
+  });
+
+  it("rejects a pre-resolved config with duplicate route paths under dev, the same as build (UI11.9)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(site, { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      "export default {};",
+      "utf8",
+    );
+    const config: LandingPageConfig = {
+      routes: [
+        {
+          path: "/",
+          body: "<p>a</p>",
+          metadata: { title: "A", description: "A" },
+        },
+        {
+          path: "/",
+          body: "<p>b</p>",
+          metadata: { title: "B", description: "B" },
+        },
+      ],
+    };
+    await expect(
+      devAdapter(root, "site/landing.config.ts", config),
+    ).rejects.toThrow(/duplicate/i);
   });
 
   it("serves a config-based adapter's routes over the dev server, reloading the config on each request (#10)", async () => {
