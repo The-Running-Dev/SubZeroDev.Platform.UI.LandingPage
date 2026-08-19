@@ -12,6 +12,7 @@ import {
   loadAdapterExport,
 } from "./adapter.js";
 import type { LandingPageConfig, LandingPageDataConfig } from "./index.js";
+import type { LandingPageData } from "./data.js";
 import { generateChangelog } from "./changelog.js";
 import {
   buildGeneric,
@@ -143,10 +144,27 @@ async function prefetchWithFallback(
   }
 }
 
-async function buildJsonData(
-  outDir: string,
+/** Composes an adapter-family `LandingPageConfig` from a validated JSON model. */
+function adapterConfigFromData(
+  data: Extract<LandingPageData, { kind: "adapter" }>,
+): LandingPageConfig {
+  return {
+    routes: data.routes,
+    ...(data.allow ? { allow: data.allow } : {}),
+    ...(data.publicDir ? { publicDir: data.publicDir } : {}),
+    ...(data.styles ? { styles: data.styles } : {}),
+  };
+}
+
+/**
+ * Fetches and validates the root model a public source map names, returning it
+ * alongside the prefetched runtime map — build-time entries hold their resolved
+ * payload inline. Shared by `build`'s and `dev`'s map-selected path, so the two
+ * cannot resolve the same map into two different sites.
+ */
+async function resolveJsonSite(
   sourceMapPath: string,
-): Promise<void> {
+): Promise<{ data: LandingPageData; runtimeMap: SourceMap }> {
   const map = await readSourceMap(sourceMapPath);
   validatePublicSources(map);
   const sourceId = parsed["source-id"] ?? "landing-page";
@@ -182,24 +200,26 @@ async function buildJsonData(
     });
     if (!result.ok)
       throw new Error(`JSON source '${sourceId}' failed: ${result.message}`);
-    const data = result.data;
-    if (data.kind === "generic") await buildGenericData(root, outDir, data);
-    else
-      await buildAdapterConfig(
-        root,
-        dirname(sourceMapPath),
-        {
-          routes: data.routes,
-          ...(data.allow ? { allow: data.allow } : {}),
-          ...(data.publicDir ? { publicDir: data.publicDir } : {}),
-          ...(data.styles ? { styles: data.styles } : {}),
-        },
-        outDir,
-        prefetched.runtimeMap,
-      );
+    return { data: result.data, runtimeMap: prefetched.runtimeMap };
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+}
+
+async function buildJsonData(
+  outDir: string,
+  sourceMapPath: string,
+): Promise<void> {
+  const { data, runtimeMap } = await resolveJsonSite(sourceMapPath);
+  if (data.kind === "generic") await buildGenericData(root, outDir, data);
+  else
+    await buildAdapterConfig(
+      root,
+      dirname(sourceMapPath),
+      adapterConfigFromData(data),
+      outDir,
+      runtimeMap,
+    );
 }
 
 /**
@@ -311,17 +331,20 @@ async function buildAdapterData(
 }
 
 /**
- * Resolves a data-backed adapter's configuration for the dev server to hold. The
- * prefetch directory is gone by the time this returns, so the caller receives the
- * composed configuration and not the runtime map — which is why the dev server
- * emits no `#szd-json-sources` (design/20-contract.md, "JSON-backed site data").
+ * Resolves a data-backed adapter's configuration and runtime map for the dev
+ * server to hold. The prefetch directory is gone by the time this returns, but
+ * the runtime map's build-time entries are already inline values that depend on
+ * no scratch directory, so the dev server can still emit `#szd-json-sources`
+ * byte-identical to what `build` writes for the same route (UI10.7).
  */
 async function resolveDataBackedConfig(
   sourceMapPath: string,
   declaration: LandingPageDataConfig<unknown>,
-): Promise<LandingPageConfig> {
-  return withDataBackedConfig(sourceMapPath, declaration, (config) =>
-    Promise.resolve(config),
+): Promise<{ config: LandingPageConfig; runtimeMap: SourceMap }> {
+  return withDataBackedConfig(
+    sourceMapPath,
+    declaration,
+    (config, runtimeMap) => Promise.resolve({ config, runtimeMap }),
   );
 }
 
@@ -335,30 +358,45 @@ async function hasSourceMap(path: string): Promise<boolean> {
   }
 }
 
-/**
- * `flags` defaults to the parsed CLI flags so `build`, `check` and `dev` behave
- * as before. `preview` passes its own object, omitting `adapter` and
- * `sourceMap`, so it always runs the same build the site's mode already uses
- * regardless of what `--adapter` or `--source-map` name (design/20-contract.md,
- * "Serving built output"). It is one parameter rather than three because a
- * parameter default fires on an explicit `undefined` too — suppressing a flag
- * by passing `undefined` positionally would silently restore it.
- */
 interface BuildFlags {
   adapter?: string;
   sourceMap?: string;
   sourceMapWasGiven: boolean;
 }
 
-async function build(
-  outDir = options.outDir,
-  flags: BuildFlags = {
+function defaultFlags(): BuildFlags {
+  return {
     adapter: parsed.adapter,
     sourceMap: parsed["source-map"],
     sourceMapWasGiven: sourceMapArgument,
-  },
-): Promise<void> {
-  await rm(outDir, { recursive: true, force: true });
+  };
+}
+
+/**
+ * Which site a repository describes, and how it was selected — the one ladder
+ * `build` and `dev` both resolve mode through (design/20-contract.md, "Input
+ * resolution is a precedence"). The family a mode carries decides the server
+ * under `dev` (adapter-family: Vite; generic-family: build then serve
+ * statically) and nothing else does; the ladder rung that selected it is
+ * irrelevant past this point (UI10.3).
+ */
+type Mode =
+  | {
+      kind: "adapter-data";
+      adapterPath: string;
+      sourceMapPath: string;
+      declaration: LandingPageDataConfig<unknown>;
+    }
+  | { kind: "map"; sourceMapPath: string }
+  | { kind: "adapter-plain"; adapterPath: string }
+  | { kind: "generic-plain" };
+
+/**
+ * The sole call site for `hasAdapter` and `hasSourceMap` in this file (UI10.10)
+ * — `build` and `dev` each call this instead of holding a resolution of their
+ * own, so the two cannot disagree about which site a repository describes.
+ */
+async function resolveMode(flags: BuildFlags): Promise<Mode> {
   const sourceMapPath = resolve(
     root,
     flags.sourceMap ?? "site/sources.public.yml",
@@ -372,16 +410,56 @@ async function build(
     if (adapterExists) {
       const adapterPath = resolve(root, adapter);
       const declaration = await loadAdapterExport(adapterPath);
-      if (isDataBacked(declaration)) {
-        await buildAdapterData(outDir, sourceMapPath, adapterPath, declaration);
-        return;
-      }
+      if (isDataBacked(declaration))
+        return {
+          kind: "adapter-data",
+          adapterPath,
+          sourceMapPath,
+          declaration,
+        };
     }
-    await buildJsonData(outDir, sourceMapPath);
-  } else if (flags.sourceMapWasGiven)
+    return { kind: "map", sourceMapPath };
+  }
+  if (flags.sourceMapWasGiven)
     throw new Error(`JSON source map not found at '${sourceMapPath}'.`);
-  else if (adapterExists) await buildAdapter(root, adapter, outDir);
-  else await buildGeneric({ ...options, outDir });
+  if (adapterExists)
+    return { kind: "adapter-plain", adapterPath: resolve(root, adapter) };
+  return { kind: "generic-plain" };
+}
+
+/**
+ * `flags` defaults to the parsed CLI flags so `build` and `check` behave as
+ * before. `preview` passes its own object, omitting `adapter` and `sourceMap`,
+ * so it always runs the same build the site's mode already uses regardless of
+ * what `--adapter` or `--source-map` name (design/20-contract.md, "Serving
+ * built output"). `BuildFlags` is one parameter rather than three because a
+ * parameter default fires on an explicit `undefined` too — suppressing a flag
+ * by passing `undefined` positionally would silently restore it.
+ */
+async function build(
+  outDir = options.outDir,
+  flags: BuildFlags = defaultFlags(),
+): Promise<void> {
+  await rm(outDir, { recursive: true, force: true });
+  const mode = await resolveMode(flags);
+  if (mode.kind === "adapter-data") {
+    await buildAdapterData(
+      outDir,
+      mode.sourceMapPath,
+      mode.adapterPath,
+      mode.declaration,
+    );
+    return;
+  }
+  if (mode.kind === "map") {
+    await buildJsonData(outDir, mode.sourceMapPath);
+    return;
+  }
+  if (mode.kind === "adapter-plain") {
+    await buildAdapter(root, mode.adapterPath, outDir);
+    return;
+  }
+  await buildGeneric({ ...options, outDir });
 }
 
 /**
@@ -447,35 +525,51 @@ async function main(): Promise<void> {
     return;
   }
   if (command === "dev") {
-    const adapter = parsed.adapter ?? "site/landing.config.ts";
-    if (await hasAdapter(root, adapter)) {
-      const adapterPath = resolve(root, adapter);
-      const declaration = await loadAdapterExport(adapterPath);
-      if (isDataBacked(declaration)) {
-        const sourceMapPath = resolve(
-          root,
-          parsed["source-map"] ?? "site/sources.public.yml",
-        );
-        if (!(await hasSourceMap(sourceMapPath)))
-          throw new Error(
-            `Adapter '${adapterPath}' declares build-time data sources, which need a JSON source map.`,
-          );
-        // Resolved once, here, rather than by the route middleware per request:
-        // re-resolving would refetch every declared source on every navigation.
-        // The middleware holds this configuration and reloads nothing, so an
-        // edit to a data-backed adapter needs a restart — the same trade generic
-        // `dev` already makes, and the reason it is stated rather than silent.
-        await devAdapter(
-          root,
-          adapter,
-          await resolveDataBackedConfig(sourceMapPath, declaration),
-        );
-        return;
-      }
-      await devAdapter(root, adapter);
+    // Mode is resolved through the same ladder `build` uses (design/20-contract.md,
+    // "dev selects the site through the same ladder, then branches on family"):
+    // the ladder decides which site, and the site's family decides which server —
+    // an adapter-family site is served by Vite however it was selected, a
+    // generic-family site is built and served statically (UI10.1–UI10.6).
+    const mode = await resolveMode(defaultFlags());
+    if (mode.kind === "adapter-data") {
+      // Resolved once, here, rather than by the route middleware per request:
+      // re-resolving would refetch every declared source on every navigation.
+      // The middleware holds this configuration and reloads nothing, so an
+      // edit to a data-backed adapter needs a restart — the same trade generic
+      // `dev` already makes, and the reason it is stated rather than silent.
+      const { config, runtimeMap } = await resolveDataBackedConfig(
+        mode.sourceMapPath,
+        mode.declaration,
+      );
+      await devAdapter(root, mode.adapterPath, config, runtimeMap);
       return;
     }
-    await build();
+    if (mode.kind === "map") {
+      const { data, runtimeMap } = await resolveJsonSite(mode.sourceMapPath);
+      await rm(options.outDir, { recursive: true, force: true });
+      if (data.kind === "generic") {
+        await buildGenericData(root, options.outDir, data);
+        serve(options.outDir);
+        return;
+      }
+      // Served with `mode.sourceMapPath` standing in for the site root, exactly
+      // as `buildJsonData` writes it with `dirname(sourceMapPath)` — the routes
+      // came from the model, not from an adapter file, so entries resolve
+      // relative to the map's directory (UI10.1, UI10.2).
+      await devAdapter(
+        root,
+        mode.sourceMapPath,
+        adapterConfigFromData(data),
+        runtimeMap,
+      );
+      return;
+    }
+    if (mode.kind === "adapter-plain") {
+      await devAdapter(root, mode.adapterPath);
+      return;
+    }
+    await rm(options.outDir, { recursive: true, force: true });
+    await buildGeneric(options);
     serve(options.outDir);
     return;
   }
