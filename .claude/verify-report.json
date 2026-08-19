@@ -22,13 +22,13 @@
     },
     {
       "name": "vitest run (npm test)",
-      "status": "Passed",
-      "detail": "Test Files 10 passed (10); Tests 100 passed (100). Duration ~40-90s depending on run. Note: across several full-suite runs during this session, one test in test/json-source.test.ts intermittently failed with 'ENOTEMPTY: directory not empty, rmdir .../.vite/deps_temp_*' - a different test each time, always Vite's own dev-server deps-optimizer cleanup racing process kill() during afterEach teardown, not a failure in the code under test. Each affected test passes reliably when run in isolation. The final full run before this report was clean: 100/100 passed with no flake."
+      "status": "Failed",
+      "detail": "Test Files 1 failed | 9 passed (10); Tests 1 failed | 109 passed (110). FAIL test/preview.test.ts > preview command > builds first, then serves --out-dir on --port, ignoring an --adapter and a --source-map that would each change what is built (UI9.5, UI9.8): Error: Test timed out in 20000ms. Reproduced identically across two independent full-suite runs this session (once via `npx vitest run`, once inside `npm run check`), both times the same test, same 20s timeout. Run in isolation (`npx vitest run test/preview.test.ts -t \"builds first, then serves\"`), it passes in ~17s. The test spawns a real child process running the CLI through tsx; under full-suite parallel load it appears to miss its 20s window. None of this slice's changes touch src/cli.ts, the preview command, or how it spawns — every new test this slice added (in test/adapter.test.ts, test/generic.test.ts, test/preview.test.ts) passed in both full runs."
     },
     {
       "name": "npm pack --dry-run (npm run pack:check)",
       "status": "Passed",
-      "detail": "npm notice Tarball Details name: subzerodev-platform-ui-landing-page version: 0.5.0 total files: 33, package size 37.4 kB, unpacked size 129.1 kB. Exited 0."
+      "detail": "npm notice Tarball Details name: subzerodev-platform-ui-landing-page version: 0.5.0 total files: 33, package size 38.0 kB, unpacked size 131.1 kB. Exited 0."
     },
     {
       "name": "git diff --check",
@@ -38,7 +38,7 @@
     {
       "name": "tools/*.Tests.ps1 (Invoke-Pester -Path tools)",
       "status": "Passed",
-      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru — Tests Passed: 113, Failed: 0, Skipped: 0, NotRun: 0, Result: Passed, Duration 00:00:48.6."
+      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru — Tests Passed: 113, Failed: 0, Skipped: 0, NotRun: 0, Result: Passed, Duration 00:03:09.38."
     }
   ]
 }
