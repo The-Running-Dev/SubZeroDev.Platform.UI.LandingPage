@@ -143,9 +143,12 @@ route-path and output-layout guarantees above hold only for a site that declares
 none — where one is declared, its output is on the consumer. The package's own
 plugin keeps its position ahead of a consumer's; `configFile: false` holds
 unconditionally, so a plugin may not reintroduce a consumer-owned Vite
-configuration file; and the dev server's `server.fs.allow` stays exactly the
-site root plus the resolved `allow` entries — a plugin that tries to widen it
-ends the dev run naming what it tried to add, rather than taking effect.
+configuration file; the production build's `outDir` stays exactly the one the
+adapter was called with; and the dev server's `server.fs.allow` stays exactly
+the site root plus the resolved `allow` entries, with `server.fs.strict`
+always on — a plugin that tries to widen either, whether by declaring it or by
+mutating the running server directly, ends the run naming what it tried to
+add, rather than taking effect.
 
 ```ts
 export default defineLandingPage({
