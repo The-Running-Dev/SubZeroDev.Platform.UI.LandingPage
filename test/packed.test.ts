@@ -5,6 +5,7 @@ import {
   readdir,
   readFile,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -30,6 +31,26 @@ afterEach(async () => {
 });
 
 describe("packed artifact", () => {
+  it("packs dist/cli.js with the executable bit set", async () => {
+    // npm install fixes up bin permissions on the linked copy regardless of
+    // what the tarball stores, which masks this from every other test here.
+    // `npx pkg@version` extracts straight from the tarball and execs it
+    // directly, so the tarball's own stored mode is what actually matters.
+    const root = await mkdtemp(join(tmpdir(), "szd-packed-mode-"));
+    roots.push(root);
+    await run("npm", ["pack", "--pack-destination", root], process.cwd());
+    const tarball = join(
+      root,
+      (await readdir(root)).find((name) => name.endsWith(".tgz"))!,
+    );
+    const extracted = join(root, "extracted");
+    await mkdir(extracted, { recursive: true });
+    await run("tar", ["-xzf", tarball, "-C", extracted], root);
+    const mode = (await stat(join(extracted, "package", "dist", "cli.js")))
+      .mode;
+    expect(mode & 0o111).not.toBe(0);
+  }, 120000);
+
   it("runs after npm installs the tarball rather than the source tree", async () => {
     const root = await mkdtemp(join(tmpdir(), "szd-packed-"));
     roots.push(root);
