@@ -1,5 +1,39 @@
 # Decisions
 
+### 2026-08-19 — Containment's owner is two functions, and the two lexical helpers stay exported
+
+Context: `/reconcile` compared the tree against the containment decision earlier
+the same day. That entry specifies one `assertWithin` resolving both sides
+through `realpath`; UI11 landed three call sites reaching two functions, and the
+contract still described one. The reason is a cost the decision did not
+anticipate: `src/staticServer.ts` checks once per request and
+`src/adapter.ts` `readStyles` once per declared stylesheet, so a single-function
+owner re-resolves the same invariant root on every call. The entry had flagged
+only the sync-versus-async cost. `src/paths.ts` also still exports `resolveFrom`,
+which no module, test or script calls, and `isWithin`, which nothing outside the
+module calls — both left in place by UI11's stated _Out of scope_, with nothing
+recording why.
+Chosen: the owner is `assertWithin` and `assertWithinResolved`, which differ only
+in whether the caller has already resolved the parent and are the same check
+either way; `assertWithinOrThrow` wraps a failure in the calling module's own
+words, keeping the original as `cause`, so a consumer reads about the stylesheet
+it declared rather than about a path comparison. `resolveFrom` and `isWithin`
+stay exported and are named in the contract as reaching no other module.
+`isWithin` in particular is kept and annotated rather than hidden: it is the
+lexical comparison both assert functions are built on, it resolves no symlink,
+and the annotation is what stops the next author reaching for it as though it
+were the containment check — which is the mistake **C33** exists to prevent.
+Rejected: **one function, resolving the parent on every call** — the shape the
+containment decision assumed, rejected because it puts a `realpath` in the
+per-request path of the static server to save one parameter. **Deleting
+`resolveFrom` and un-exporting `isWithin`** — the smallest surface, and it would
+make that one hazard structural rather than instructional; rejected for now
+because it contradicts UI11's stated scope and buys a narrowing no caller is
+asking for, but it is the cheap move if `paths` is ever touched again.
+Reversibility: cheap in both directions. Merging the two assert functions is a
+mechanical change at three call sites; deleting the two helpers is a deletion and
+a contract row.
+
 ### 2026-08-19 — `--base-path` is a deployment flag both generic forms honour
 
 Context: `/contract` verified **C29** against the tree and found the invariant

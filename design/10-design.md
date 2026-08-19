@@ -112,15 +112,15 @@ follows is ownership and direction only.
 | ----------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
 | [`src/baseCss.ts`](../src/baseCss.ts)           | The semver-governed generic style surface (**C31**)                            | nothing                                                            |
 | [`src/git.ts`](../src/git.ts)                   | The subprocess boundary, and collapsing every failure of it into one message   | nothing                                                            |
-| [`src/staticServer.ts`](../src/staticServer.ts) | Serving a built tree: resolution, containment, content type                    | nothing                                                            |
+| [`src/staticServer.ts`](../src/staticServer.ts) | Serving a built tree: resolution, containment, content type                    | `paths`                                                            |
 | [`src/merge.ts`](../src/merge.ts)               | The documentation-tree guard                                                   | nothing                                                            |
 | [`src/paths.ts`](../src/paths.ts)               | Filesystem containment, symlinks resolved before comparing                     | nothing                                                            |
 | [`src/route.ts`](../src/route.ts)               | The route grammar, the form discrimination, and uniqueness                     | type-only on `index`                                               |
 | [`src/index.ts`](../src/index.ts)               | The public type surface and the eager validation seam                          | `route`, re-exports `data`                                         |
 | [`src/data.ts`](../src/data.ts)                 | The persisted schema and its strictness                                        | `route`, types from `index`                                        |
 | [`src/changelog.ts`](../src/changelog.ts)       | Deriving entries from history, and escaping what a commit message can carry    | `git`                                                              |
-| [`src/generic.ts`](../src/generic.ts)           | The generic shell: rendering, sanitization, derived copy                       | `baseCss`, `git`, `data`                                           |
-| [`src/adapter.ts`](../src/adapter.ts)           | The single document writer, both Vite invocations, the guards over them        | `route`, types from `index`                                        |
+| [`src/generic.ts`](../src/generic.ts)           | The generic shell: rendering, sanitization, derived copy                       | `baseCss`, `git`, `data`, `paths`                                  |
+| [`src/adapter.ts`](../src/adapter.ts)           | The single document writer, both Vite invocations, the guards over them        | `route`, `paths`, types from `index`                               |
 | [`src/cli.ts`](../src/cli.ts)                   | Flags, the precedence ladder, and every decision about which mode a site is in | `adapter`, `generic`, `data`, `changelog`, `merge`, `staticServer` |
 
 The graph is acyclic at runtime. It has one apparent cycle — `index` imports
@@ -158,9 +158,10 @@ an invariant implemented once per caller holds wherever someone remembered it �
 and the three implementations that preceded this decision were not even the same
 check, which is the argument against three rather than an accident of three.
 Resolving symlinks before comparing is the property that only a shared owner
-can be relied on to have. _The tree does not do this yet:_ `paths` is imported
-by nothing and the three checks are still local and still disagree
-(`90-decisions.md`, 2026-08-19).
+can be relied on to have. The owner is two functions rather than one, because a
+per-request server and a per-stylesheet loop must not re-resolve the same root
+on every call; both resolve both sides before comparing, which is the property
+that matters (`90-decisions.md`, 2026-08-19).
 
 ## Control flow
 
@@ -188,9 +189,7 @@ site is built and served statically. Where `dev` has prefetched declared
 sources, it emits the resulting runtime map, so a consumer entry finds the same
 element with the same shape locally and in production; a declared source that is
 unreachable at startup ends the command rather than starting the server without
-it, because no path in this package continues past a failed declared source.
-_The tree does not do this yet:_ `dev` reads no source map when a plain adapter
-is present, and discards the runtime map it resolves
+it, because no path in this package continues past a failed declared source
 (`90-decisions.md`, 2026-08-19).
 
 A Vite dev server holds the site root; the package's own route middleware
@@ -257,10 +256,11 @@ saying so is what stops a future reader assuming a rollback that is not there.
 
 **Within one invocation, nothing this package does is concurrent, and what
 enforces it is that every step is sequentially awaited** — there is no work
-queue, no worker pool and no unawaited promise. The single exception is a pair
-of path resolutions taken together, which have no ordering relationship with
-each other. Concurrency that does exist comes from outside: the two servers
-handle overlapping requests on the event loop, and the bundler parallelises
+queue, no worker pool, and nothing resolved in parallel: even the two `realpath`
+calls a containment check makes are awaited one after the other. Concurrency
+that does exist comes from outside: the two servers handle overlapping requests
+on the event loop — which is why the static server's request handler is the one
+promise this package deliberately does not await — and the bundler parallelises
 internally within a build the package has already serialised around.
 
 Ordering, by contrast, does real work, and in five places it _is_ the
@@ -352,7 +352,9 @@ ones a reader is least likely to check twice
 None. The three this rewrite raised were put to the owner and answered the same
 day; each is logged in [`90-decisions.md`](90-decisions.md) with its rejected
 alternatives, and the design above states the decided behaviour rather than the
-question. All three describe behaviour the tree does not yet have; the two
-places that shows are marked _the tree does not do this yet_. The contract's
-cross-module surface row for `paths` is false until the containment decision
-lands, and correcting it is `/contract`'s.
+question. Two of the three are now in the tree — `dev` resolves through the
+ladder and emits the prefetched map (UI10), and containment has one owner that
+follows symbolic links (UI11). The third is not: `--base-path` still does not
+reach the JSON generic form, which [`20-contract.md`](20-contract.md) **C29**
+marks _decided, not yet in the tree_ and `90-decisions.md` § _Open_ stages for a
+bug issue.
