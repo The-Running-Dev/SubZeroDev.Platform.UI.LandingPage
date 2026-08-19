@@ -66,11 +66,22 @@ jobs:
           npm ci
           npm run build
 
+      - name: Install the published package
+        # A plain `npx subzerodev-platform-ui-landing-page@<version> ...` run
+        # from the repo root resolves to *this* repo's own unbuilt
+        # package.json (same name, same bin) instead of fetching the
+        # registry tarball, since npm exec prefers a same-name bin already
+        # declared by the cwd's project — and this workflow never builds
+        # dist/ at the repo root. A global install puts the published bin on
+        # PATH directly, sidestepping that resolution entirely. See
+        # design/90-decisions.md and issue #43.
+        run: npm install --global subzerodev-platform-ui-landing-page@${{ env.PACKAGE_VERSION }}
+
       - name: Generate changelog (build-only, never committed)
         # --repository works around inferRepository's regex rejecting this
         # org's dotted repo names (see design/90-decisions.md and the
         # spawned fix task) rather than relying on inference here.
-        run: npx --yes subzerodev-platform-ui-landing-page@${{ env.PACKAGE_VERSION }} generate-changelog --repository ${{ github.repository }}
+        run: subzerodev-platform-ui-landing-page generate-changelog --repository ${{ github.repository }}
 
       - name: Build landing page
         # --repository-url works around the same inferRepository regex bug
@@ -79,10 +90,10 @@ jobs:
         # --docs-url carries the Pages project subpath, matching `baseUrl` in
         # docs/docusaurus.config.ts — unlike the shell's own hardcoded paths
         # noted above, this one is the caller's to get right.
-        run: npx --yes subzerodev-platform-ui-landing-page@${{ env.PACKAGE_VERSION }} build --docs-url /SubZeroDev.Platform.UI.LandingPage/docs/ --repository-url https://github.com/${{ github.repository }}
+        run: subzerodev-platform-ui-landing-page build --docs-url /SubZeroDev.Platform.UI.LandingPage/docs/ --repository-url https://github.com/${{ github.repository }}
 
       - name: Merge landing page into documentation build
-        run: npx --yes subzerodev-platform-ui-landing-page@${{ env.PACKAGE_VERSION }} merge --docs-output docs/build
+        run: subzerodev-platform-ui-landing-page merge --docs-output docs/build
 
       - uses: actions/upload-pages-artifact@v5
         with:
