@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { join, resolve, sep } from "node:path";
+import { assertWithin } from "./paths.js";
 
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
@@ -31,9 +32,10 @@ function contentTypeFor(path: string): string {
 }
 
 /**
- * Resolves a request pathname to a path inside `root`, or `undefined` when it
- * decodes to something outside it. Percent-decoded once before resolution, so
- * a `..` segment — literal or percent-escaped — can never escape `root`.
+ * Resolves a request pathname to a candidate path under `root`. Percent-decoded
+ * once before resolution, so a `..` segment — literal or percent-escaped — can
+ * never escape `root` lexically; containment against a symlinked candidate is
+ * decided by `resolveTarget`, through `assertWithin`.
  */
 function resolveWithinRoot(root: string, pathname: string): string | undefined {
   let decoded: string;
@@ -42,21 +44,33 @@ function resolveWithinRoot(root: string, pathname: string): string | undefined {
   } catch {
     return undefined;
   }
-  const target = resolve(root, `.${decoded}`);
-  const boundary = root.endsWith(sep) ? root : root + sep;
-  if (target !== root && !target.startsWith(boundary)) return undefined;
-  return target;
+  return resolve(root, `.${decoded}`);
 }
 
+/**
+ * Resolves a request pathname to a path inside `root`, or `undefined` when the
+ * candidate — after any directory-index rewrite — cannot be read (it does not
+ * exist) or resolves outside `root` through a symlink. `assertWithin` decides
+ * containment for every case; nothing here compares paths itself (**C33**).
+ */
 async function resolveTarget(
   root: string,
   pathname: string,
 ): Promise<string | undefined> {
-  const target = resolveWithinRoot(root, pathname);
-  if (!target) return undefined;
-  if (pathname.endsWith("/")) return join(target, "index.html");
-  const stats = await stat(target).catch(() => undefined);
-  if (stats?.isDirectory()) return join(target, "index.html");
+  const candidate = resolveWithinRoot(root, pathname);
+  if (!candidate) return undefined;
+  let target = candidate;
+  if (pathname.endsWith("/")) {
+    target = join(candidate, "index.html");
+  } else {
+    const stats = await stat(candidate).catch(() => undefined);
+    if (stats?.isDirectory()) target = join(candidate, "index.html");
+  }
+  try {
+    await assertWithin(root, target, "Requested path");
+  } catch {
+    return undefined;
+  }
   return target;
 }
 
