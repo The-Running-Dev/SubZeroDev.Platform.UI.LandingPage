@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -20,6 +19,7 @@ import {
   type GenericOptions,
 } from "./generic.js";
 import { mergeLanding } from "./merge.js";
+import { createStaticServer } from "./staticServer.js";
 import { validateLandingPageData } from "./data.js";
 import {
   createJsonLoader,
@@ -282,13 +282,35 @@ async function buildAdapterData(
   }
 }
 
-async function build(outDir = options.outDir): Promise<void> {
+/**
+ * `flags` defaults to the parsed CLI flags so `build`, `check` and `dev` behave
+ * as before. `preview` passes its own object, omitting `adapter` and
+ * `sourceMap`, so it always runs the same build the site's mode already uses
+ * regardless of what `--adapter` or `--source-map` name (design/20-contract.md,
+ * "Serving built output"). It is one parameter rather than three because a
+ * parameter default fires on an explicit `undefined` too — suppressing a flag
+ * by passing `undefined` positionally would silently restore it.
+ */
+interface BuildFlags {
+  adapter?: string;
+  sourceMap?: string;
+  sourceMapWasGiven: boolean;
+}
+
+async function build(
+  outDir = options.outDir,
+  flags: BuildFlags = {
+    adapter: parsed.adapter,
+    sourceMap: parsed["source-map"],
+    sourceMapWasGiven: sourceMapArgument,
+  },
+): Promise<void> {
   await rm(outDir, { recursive: true, force: true });
   const sourceMapPath = resolve(
     root,
-    parsed["source-map"] ?? "site/sources.public.yml",
+    flags.sourceMap ?? "site/sources.public.yml",
   );
-  const adapter = parsed.adapter ?? "site/landing.config.ts";
+  const adapter = flags.adapter ?? "site/landing.config.ts";
   const adapterExists = await hasAdapter(root, adapter);
   if (
     await (async () => {
@@ -312,10 +334,35 @@ async function build(outDir = options.outDir): Promise<void> {
       }
     }
     await buildJsonData(outDir, sourceMapPath);
-  } else if (sourceMapArgument)
+  } else if (flags.sourceMapWasGiven)
     throw new Error(`JSON source map not found at '${sourceMapPath}'.`);
   else if (adapterExists) await buildAdapter(root, adapter, outDir);
   else await buildGeneric({ ...options, outDir });
+}
+
+/**
+ * Serves `outDir` on `--port`, reporting a bind failure the way every other
+ * path in this file reports one. `listen` fails asynchronously, after `main`'s
+ * promise has already settled, so an unhandled `'error'` event would escape
+ * `main().catch` and end the process on a stack trace instead — and `dev` and
+ * `preview` share a default port, so running both is the collision that
+ * reaches it.
+ */
+function serve(outDir: string): void {
+  const requested = Number(parsed.port ?? "4173");
+  const server = createStaticServer(outDir);
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    console.error(
+      error.code === "EADDRINUSE"
+        ? `Port ${requested} is already in use.`
+        : error.message,
+    );
+    process.exitCode = 1;
+  });
+  server.listen(requested, "127.0.0.1", () => {
+    const { port } = server.address() as { port: number };
+    console.log(`http://127.0.0.1:${port}`);
+  });
 }
 
 async function main(): Promise<void> {
@@ -362,26 +409,16 @@ async function main(): Promise<void> {
       return;
     }
     await build();
-    const server = createServer(async (request, response) => {
-      const relative =
-        request.url === "/"
-          ? "index.html"
-          : (request.url?.replace(/^\//, "") ?? "index.html");
-      const target = join(
-        options.outDir,
-        relative.endsWith("/") ? `${relative}index.html` : relative,
-      );
-      const data = await readFile(target).catch(() => undefined);
-      response.writeHead(data ? 200 : 404);
-      response.end(data ?? "Not found");
-    });
-    server.listen(Number(parsed.port ?? "4173"), "127.0.0.1", () =>
-      console.log(`http://127.0.0.1:${parsed.port ?? "4173"}`),
-    );
+    serve(options.outDir);
+    return;
+  }
+  if (command === "preview") {
+    await build(options.outDir, { sourceMapWasGiven: false });
+    serve(options.outDir);
     return;
   }
   throw new Error(
-    "Usage: subzerodev-platform-ui-landing-page <dev|build|check|generate-changelog|merge>",
+    "Usage: subzerodev-platform-ui-landing-page <dev|build|preview|check|generate-changelog|merge>",
   );
 }
 

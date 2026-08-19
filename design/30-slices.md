@@ -284,8 +284,10 @@ Acceptance:
 - UI9.4 `GET /index.html?v=1` and `GET /#top` return the home document — neither
   the query nor the fragment reaches the filename.
 - UI9.5 `preview --out-dir <dir> --port <n>` serves `<dir>` on `<n>`. Passing
-  `--adapter` naming a module that does not exist changes nothing about what is
-  served, because `preview` reads no adapter module and no source map.
+  `--adapter` or `--source-map` changes nothing about what is served, because
+  `preview` honours neither flag — including where the flag names something
+  that would otherwise change the build, or fail it. Mode is still resolved,
+  once, by the `build` `preview` runs.
 - UI9.6 `preview` on a generic-mode site serves its built tree by the same rules,
   and the two modes differ only in what `build` wrote.
 - UI9.7 Generic `dev` serves through that same implementation, so on that path
