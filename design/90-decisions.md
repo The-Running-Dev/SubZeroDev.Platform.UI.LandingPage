@@ -1,5 +1,90 @@
 # Decisions
 
+### 2026-08-19 — `pages.yml`'s repository-inference workarounds are retained with the stated cause marked unverified
+
+Context: `.github/workflows/pages.yml` passes `--repository` to
+`generate-changelog` and `--repository-url` to `build`, both commented as working
+around `src/git.ts` `inferRepository` rejecting this organisation's dotted
+repository names, and both citing this file and "the spawned fix task".
+`/reconcile` found no entry here and could not reproduce the defect: running
+`repositoryFromRemote`'s expression directly against four remote forms of this
+repository's name — HTTPS with and without `.git`, SSH with `.git`, and an
+undotted control — returned the correct `owner/name` every time. The CI
+environment was not reproduced, so what actually failed there is unknown.
+Chosen: keep both flags and record the cause as **unverified**. The stated
+diagnosis is not supported by the regex, so it must not be inherited as fact by
+whoever next reads those comments; the flags stay because they are correct
+regardless of cause — passing the repository explicitly is what a caller-owned
+workflow ought to do — and removing them tests the hypothesis in the deploy path.
+Diagnosis is filed rather than done here.
+Rejected: **deleting the flags to see whether the deploy still works** — the
+experiment runs in production, and a wrong answer ships a landing page with no
+Repository link and a failed changelog step. **Correcting only the workflow
+comments and writing no entry** — cheaper, but it leaves two workarounds with no
+recorded reason, which is how they get removed later by someone who reads the
+corrected comment as "unnecessary". **Treating the flags as plainly redundant and
+the comments as simply wrong** — possible, and it may prove true, but the failure
+was observed by someone and the regex is only one of the two things
+`inferRepository` depends on; `git config --get remote.origin.url` under
+`actions/checkout` is not ruled out, and neither is the published `0.5.0`
+differing from this tree.
+Reversibility: cheap. If diagnosis clears `inferRepository`, both flags and both
+comments come out in one commit.
+
+### 2026-08-19 — The self-hosted deploy installs the published package globally rather than invoking it through `npx`
+
+Context: the 2026-08-18 entry below chose to invoke the package "via `npx`
+against the last-published version, exactly as any external consumer would".
+That does not work from this repository's own root, and the reason is specific to
+dogfooding: `npm exec` prefers a same-name binary already declared by the current
+project, so `npx subzerodev-platform-ui-landing-page@<version> …` resolves to
+_this_ repository's `package.json` — same name, same `bin` — instead of fetching
+the registry tarball, and the Pages workflow never builds `dist/` at the
+repository root, so the resolved binary does not exist. `/reconcile` found the
+change already in the tree (commit `6d63f9f`) with the reasoning in a workflow
+comment that points at this file, and nothing here to point at.
+Chosen: install the published package globally, putting the published binary on
+`PATH` and sidestepping `npm exec`'s resolution entirely. The 2026-08-18 entry
+keeps its wording — this file is append-only, and that the `npx` form was chosen
+and then failed is the part worth keeping.
+Rejected: **building `dist/` at the repository root in the workflow** so the
+same-name resolution finds a real binary — it would make the deploy exercise the
+working tree rather than the published artifact, which is the one property the
+2026-08-18 entry chose `npx` for in the first place. **Renaming the repository's
+own package or `bin`** to break the collision — a public-surface change made to
+work around a local tooling behaviour. **Invoking the tarball path explicitly**
+— possible, but it encodes npm's cache layout into a workflow.
+Reversibility: cheap. Reversing is one workflow step, and the constraint is
+npm's, not this package's — a consumer that is not also this repository never
+meets it.
+
+### 2026-08-19 — The GitHub delivery surface carries no CLI flags, and the limitation is stated rather than fixed here
+
+Context: `/reconcile` compared the delivery surface against `10-design.md`
+§ _Control flow_, which says the composite action and reusable workflow "carry
+that into Pages". They do, but neither forwards a CLI flag, so `--base-path`
+cannot reach a build run through either. A legacy generic site deployed that way
+onto a GitHub Pages project subpath serves unstyled with broken navigation — the
+failure `.github/workflows/pages.yml`'s own header comment describes at length,
+and the one **C29** names for the JSON generic form. Nothing recorded it, because
+this repository deploys by invoking the CLI directly (2026-08-18 below) and so
+never exercises the surface. `action.yml`'s default `package-version` and the
+action SHA `deploy-pages.yml` pins have both stayed at the initial release.
+Chosen: state the limitation in `20-contract.md` § _GitHub delivery_, as a
+limitation with no id — nothing checks it, and an id implies something to check —
+and file the fix rather than writing it here. Threading a base path through a
+composite action and a reusable workflow adds an input to a published surface,
+which is a contract amendment and a slice, not a reconciliation's to invent.
+Rejected: **staging it for `/fix` with no contract change** — cheaper, but it
+leaves the contract silent about a failure that is already silent in production,
+which is how the JSON-generic half of this went unrecorded until `/contract`
+found it. **Treating it as a consumer-side concern**, on the grounds that the
+2026-08-18 entry knowingly declined to use `deploy-pages.yml` here — declining to
+_use_ a surface is not declining to _support_ it, and `package.json` publishes
+both files.
+Reversibility: cheap. Reversing means deleting one paragraph and one `## Open`
+item; no code has been written against it.
+
 ### 2026-08-19 — Containment's owner is two functions, and the two lexical helpers stay exported
 
 Context: `/reconcile` compared the tree against the containment decision earlier
@@ -822,8 +907,3 @@ one relative link in `README.md` that changed with them.
 ## Open
 
 Staging only. Once an item becomes a GitHub issue, `/track` removes it from here.
-
-- `--base-path` does not reach `src/generic.ts` `buildGenericData`, so a
-  JSON-generic site emits root-absolute self-links and stylesheet hrefs and
-  breaks under a GitHub Pages project subpath (2026-08-19 decision above). Needs
-  a bug issue filed from `.github/ISSUE_TEMPLATE/`, then `/fix`.

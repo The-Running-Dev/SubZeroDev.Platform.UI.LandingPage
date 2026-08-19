@@ -264,6 +264,19 @@ exposes only `inputs` and `secrets`, so a caller has no mechanism to supply
 either, and `actions/deploy-pages` requires the environment
 (`90-decisions.md`, 2026-08-19).
 
+**Neither forwards a CLI flag, so `--base-path` cannot reach a build run this
+way.** A legacy generic site deployed through this surface onto a GitHub Pages
+project subpath emits root-absolute self-links and stylesheet hrefs, and so
+serves unstyled with broken navigation — the same failure **C29** names for the
+JSON generic form, reached from the supported delivery path rather than from an
+input form. `action.yml`'s default `package-version` and the action SHA
+`deploy-pages.yml` pins have both stayed at the initial release, so a caller
+that omits the version installs one older than [`README.md`](../README.md)
+instructs. This is a limitation and carries no id, because nothing checks it; it
+is stated because the failure is silent, and because this repository deploys by
+invoking the CLI directly (`90-decisions.md`, 2026-08-18) and therefore never
+exercises the surface (`90-decisions.md`, 2026-08-19).
+
 ### Cross-module surface
 
 Not published to npm, but crossing a module boundary within the package, so a
@@ -336,9 +349,10 @@ document. Only the code-enforced ones may be trusted without checking.
   rather than a URL question because the document's output directory is derived
   from the path and from nothing else.
 - **C2** No two routes in one site declare the same path. _`src/route.ts`
-  `assertUniquePaths`, called from `defineLandingPage`, `validateLandingPageData`
-  and `buildAdapterConfig`; code._ The third call site is what makes this hold
-  for a plain object literal that never imported the package.
+  `assertUniquePaths`, called from `defineLandingPage`, `validateLandingPageData`,
+  `buildAdapterConfig` and `devAdapter`; code._ The third call site is what makes
+  this hold for a plain object literal that never imported the package; the
+  fourth is what makes `dev` reject the route set `build` would reject.
 - **C3** A route declares exactly one of `entry` and `body`. _`src/route.ts`
   `assertRoute`; code._ Structural discrimination makes "neither" and "both"
   representable, so this is where they are refused.
@@ -352,8 +366,8 @@ document. Only the code-enforced ones may be trusted without checking.
   route's `body` and its `stylesheet`, validated by **C4**, and the source-map
   payload, escaped for the carrier that holds it by **C9**. At the generic
   writer the single exception is rendered Markdown, sanitized by **C8**. There
-  is no fourth. _`src/adapter.ts` `html`, `src/generic.ts` `documentHtml`;
-  code._
+  is no fourth at the adapter writer and no second at the generic one.
+  _`src/adapter.ts` `html`, `src/generic.ts` `documentHtml`; code._
 - **C8** Generic Markdown is sanitized, not escaped. _`src/generic.ts` `render`
   via `rehype-sanitize`; code._ Escaping it would defeat the one thing it is
   for.

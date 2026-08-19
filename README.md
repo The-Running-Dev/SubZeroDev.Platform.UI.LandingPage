@@ -36,8 +36,21 @@ optional `site/theme.css`, and optional `site/public/`. The build writes
   `site/dist/`) and `--port` (default `4173`).
 - `check` builds into a discarded temporary directory, to verify the build
   succeeds without writing `site/dist/`.
+- `generate-changelog` derives changelog entries from first-parent Git history,
+  newest first, inferring the repository from `origin` unless
+  `--repository owner/name` names it. A subject ending in `(#<digits>)` becomes
+  a pull-request link, and one matching `update changelog` is dropped so the
+  command's own commits never accumulate in its output. `--check` compares
+  against the existing file instead of writing it.
 - `merge` copies a built site into a docs deployment tree without touching a
   protected path.
+
+`--base-path` (default `/`) prefixes the generic shell's self-links and
+stylesheet hrefs, for a site deployed under a project subpath. It reaches only
+the legacy README/CHANGELOG generic form today — a JSON `kind: "generic"` model
+does not receive it yet, so a JSON-backed generic site under a subpath emits
+root-absolute links regardless of the flag. It is not carried by the composite
+action or the reusable workflow, so a site deployed through those cannot set it.
 
 ## JSON site data
 
