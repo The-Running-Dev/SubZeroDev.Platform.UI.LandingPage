@@ -546,8 +546,11 @@ async function main(): Promise<void> {
     }
     if (mode.kind === "map") {
       const { data, runtimeMap } = await resolveJsonSite(mode.sourceMapPath);
-      await rm(options.outDir, { recursive: true, force: true });
       if (data.kind === "generic") {
+        // Cleared only on the branch that writes it back. An adapter-family
+        // site is served by Vite and writes nothing here, so emptying the
+        // build's output directory would destroy it and leave nothing there.
+        await rm(options.outDir, { recursive: true, force: true });
         await buildGenericData(root, options.outDir, data);
         serve(options.outDir);
         return;

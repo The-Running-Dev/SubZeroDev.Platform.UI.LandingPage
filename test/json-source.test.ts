@@ -648,7 +648,11 @@ describe("JSON source resolution", () => {
     const root = await fixture(
       `version: 1\nsources:\n  landing-page:\n    at: build\n    url: http://127.0.0.1:${port}/landing.json\n    cache: manual\n`,
     );
-    await expect(spawnDev(root)).rejects.toThrow(/before listening/);
+    // Matched on the prefetch failure the fixture provokes, not on the
+    // harness's own "before listening" wording, which any early exit produces.
+    await expect(spawnDev(root)).rejects.toThrow(
+      /before listening[\s\S]*build failed for 1 source\(s\): landing-page/,
+    );
   }, 60000);
 
   it("--source-map naming a file that does not exist ends dev with the same message build raises for the same flag (UI10.9)", async () => {

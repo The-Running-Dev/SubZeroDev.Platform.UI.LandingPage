@@ -469,7 +469,10 @@ function fsAllowGuardPlugin(allowed: readonly string[]): PluginOption {
  * refetching) every declared source on every navigation. `runtimeMap`, given
  * only alongside `resolved`, is the prefetched map `build` writes for the same
  * site; passed to `html` per route so a data-backed entry route emits
- * `#szd-json-sources` byte-identical to built output (UI10.7).
+ * `#szd-json-sources` byte-identical to built output (UI10.7). `filteredMap`
+ * runs whether or not it was given, exactly as the build runs it, so a route
+ * declaring `dataSourceIds` with no map ends the request here rather than
+ * serving a document `build` refuses to write.
  */
 export async function devAdapter(
   root: string,
@@ -487,6 +490,10 @@ export async function devAdapter(
   const server = await createServer({
     root: siteRoot,
     configFile: false,
+    // Resolved exactly as `stagePublicDir` resolves it for the build, so a
+    // declared public directory is served here too; left unset otherwise, where
+    // Vite's own default is already the `<siteRoot>/public` the build uses.
+    ...(config.publicDir ? { publicDir: resolve(root, config.publicDir) } : {}),
     server: { fs: { allow: allowed } },
     plugins: [
       {
@@ -536,7 +543,7 @@ export async function devAdapter(
                   route,
                   siteRoot,
                   styles.map((candidate) => candidate.href),
-                  runtimeMap ? filteredMap(route, runtimeMap) : undefined,
+                  filteredMap(route, runtimeMap),
                 ),
               );
               response.setHeader("Content-Type", "text/html");
