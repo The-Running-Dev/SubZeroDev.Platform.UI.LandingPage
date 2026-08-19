@@ -18,15 +18,19 @@ optional `site/theme.css`, and optional `site/public/`. The build writes
 ## Commands
 
 - `build` writes the built site to `site/dist/` (or `--out-dir`).
-- `dev` serves the site locally: a custom-adapter site through Vite's dev
-  server, which transforms on request; a generic site by building once at
-  startup and serving that output, so a source edit needs a restart. A
-  custom-adapter site composed by `defineLandingPageData` resolves its declared
-  sources once at startup too — re-resolving per request would refetch every
-  source on every navigation — so editing that configuration also needs a
-  restart. Declared site-wide `styles` are linked and served here as well as in
-  the build; `#szd-json-sources` is built output only, since the map it carries
-  is the prefetched one.
+- `dev` resolves the site through the same precedence `build` uses, then
+  branches on family: an adapter-family site — a custom `site/landing.config.ts`
+  or a `site/sources.public.yml` root model declaring `kind: "adapter"` — is
+  served through Vite's dev server, which transforms on request, whichever
+  selected it; a generic-family site is built once at startup and served from
+  that output, so a source edit needs a restart. A custom-adapter site composed
+  by `defineLandingPageData` resolves its declared sources once at startup too —
+  re-resolving per request would refetch every source on every navigation — so
+  editing that configuration also needs a restart, and a source that cannot be
+  resolved ends `dev` before it starts listening. Declared site-wide `styles`
+  are linked and served here as well as in the build; `#szd-json-sources` is
+  emitted here too wherever a prefetch has run, byte-identical to the build-time
+  script for the same route.
 - `preview` builds, then serves the real built output — the same tree `build`
   writes, fingerprinted asset names and all — on `--out-dir` (default
   `site/dist/`) and `--port` (default `4173`).

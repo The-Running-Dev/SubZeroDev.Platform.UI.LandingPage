@@ -1,49 +1,44 @@
 {
   "gates": [
     {
-      "name": "format:check (npm run format:check)",
+      "name": "prettier --check . (npm run format:check)",
       "status": "Passed",
-      "detail": "prettier --check . — \"Checking formatting...\" / \"All matched files use Prettier code style!\", after `npx prettier --write .claude/gates.json` to bring the freshly stale-refreshed gates cache back in line with repo formatting (Test-GatesCache.ps1 -Write does not emit a trailing newline)."
+      "detail": "Checking formatting... All matched files use Prettier code style!"
     },
     {
-      "name": "lint (npm run lint)",
+      "name": "eslint . (npm run lint)",
       "status": "Passed",
-      "detail": "eslint . — completed with no output and exit 0."
+      "detail": "No output; eslint exited 0."
     },
     {
-      "name": "typecheck (npm run typecheck)",
+      "name": "tsc --noEmit (npm run typecheck)",
       "status": "Passed",
-      "detail": "tsc --noEmit — completed with no output and exit 0."
+      "detail": "No output; tsc exited 0."
     },
     {
-      "name": "build (npm run build)",
+      "name": "tsc -p tsconfig.json (npm run build)",
       "status": "Passed",
-      "detail": "tsc -p tsconfig.json && chmod dist/cli.js — completed with no output and exit 0."
+      "detail": "No output; tsc exited 0, dist/cli.js chmod to 0o755 succeeded."
     },
     {
-      "name": "test (npm test / vitest run)",
+      "name": "vitest run (npm test)",
       "status": "Passed",
-      "detail": "vitest run — Test Files 10 passed (10), Tests 93 passed (93), Duration 48.34s. Includes this branch's two new regression tests for --base-path (test/generic.test.ts): \"prefixes its own self-links with basePath, for subpath deploys\" and \"defaults basePath to root-absolute when omitted\". Verified by reverting src/generic.ts and src/cli.ts to main and re-running the first of those two — it failed with the pre-fix root-absolute hrefs in the diff output, confirming the test guards the fix."
+      "detail": "Test Files 10 passed (10); Tests 100 passed (100). Duration ~40-90s depending on run. Note: across several full-suite runs during this session, one test in test/json-source.test.ts intermittently failed with 'ENOTEMPTY: directory not empty, rmdir .../.vite/deps_temp_*' - a different test each time, always Vite's own dev-server deps-optimizer cleanup racing process kill() during afterEach teardown, not a failure in the code under test. Each affected test passes reliably when run in isolation. The final full run before this report was clean: 100/100 passed with no flake."
     },
     {
-      "name": "pack:check (npm run pack:check)",
+      "name": "npm pack --dry-run (npm run pack:check)",
       "status": "Passed",
-      "detail": "npm pack --dry-run — produced subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, package size 35.8 kB, no errors."
-    },
-    {
-      "name": "tools/*.Tests.ps1 (Invoke-Pester -Path tools)",
-      "status": "Passed",
-      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru — Tests Passed: 113, Failed: 0, Skipped: 0, NotRun: 0, Result: Passed, Duration 00:00:52.27."
+      "detail": "npm notice Tarball Details name: subzerodev-platform-ui-landing-page version: 0.5.0 total files: 33, package size 37.4 kB, unpacked size 129.1 kB. Exited 0."
     },
     {
       "name": "git diff --check",
       "status": "Passed",
-      "detail": "git diff --check on the branch diff — exit 0, no whitespace errors reported."
+      "detail": "No output; git diff --check exited 0, no whitespace errors."
     },
     {
-      "name": "Deploy self-hosted landing page and docs (.github/workflows/pages.yml)",
-      "status": "DidNotRun",
-      "reason": "Not a CI-gated check (no `# verification: true` flag on any step in this or any other workflow file — .github/gates discovery found zero flagged steps in this repo). This branch also only edits the workflow's comment block, not its run steps, and the new --base-path flag is explicitly not wired into it yet (the step installs the published npm package, which does not carry this fix until a release ships) — there is nothing in this PR's diff to that file for the workflow to actually exercise differently. The real Pages deploy on main after merge is where a change to this file's run steps would need to be checked."
+      "name": "tools/*.Tests.ps1 (Invoke-Pester -Path tools)",
+      "status": "Passed",
+      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru — Tests Passed: 113, Failed: 0, Skipped: 0, NotRun: 0, Result: Passed, Duration 00:00:48.6."
     }
   ]
 }
