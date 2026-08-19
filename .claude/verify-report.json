@@ -3,12 +3,12 @@
     {
       "name": "format:check (npm run format:check)",
       "status": "Passed",
-      "detail": "prettier --check . — \"Checking formatting...\" / \"All matched files use Prettier code style!\" after `npx prettier --write .claude/gates.json` to bring the freshly-written gates cache in line with repo formatting."
+      "detail": "prettier --check . — \"Checking formatting...\" / \"All matched files use Prettier code style!\", after `npx prettier --write .claude/gates.json` to bring the freshly stale-refreshed gates cache back in line with repo formatting (Test-GatesCache.ps1 -Write does not emit a trailing newline)."
     },
     {
       "name": "lint (npm run lint)",
-      "status": "Failed",
-      "detail": "eslint . — 92 problems (92 errors, 0 warnings). All 9 errors reported are identical parsing errors on files under test/: \"Parsing error: No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present: - /Users/ben/Dropbox/Projects/SubZeroDev.Platform.UI.LandingPage - /Users/ben/Dropbox/Projects/SubZeroDev.Platform.UI.LandingPage/.claude/worktrees/inspiring-jemison-f70809 You'll need to explicitly set tsconfigRootDir in your parser options.\" Caused by a pre-existing, gitignored worktree directory (.claude/worktrees/inspiring-jemison-f70809, dated 2026-08-18, unrelated to this branch) that carries its own tsconfig.json and confuses eslint's typed-linting root inference. Not caused by this branch's diff (.github/workflows/pages.yml only)."
+      "status": "Passed",
+      "detail": "eslint . — completed with no output and exit 0."
     },
     {
       "name": "typecheck (npm run typecheck)",
@@ -23,12 +23,17 @@
     {
       "name": "test (npm test / vitest run)",
       "status": "Passed",
-      "detail": "vitest run — Test Files 19 passed (19), Tests 160 passed (160), Duration 40.55s."
+      "detail": "vitest run — Test Files 10 passed (10), Tests 93 passed (93), Duration 48.34s. Includes this branch's two new regression tests for --base-path (test/generic.test.ts): \"prefixes its own self-links with basePath, for subpath deploys\" and \"defaults basePath to root-absolute when omitted\". Verified by reverting src/generic.ts and src/cli.ts to main and re-running the first of those two — it failed with the pre-fix root-absolute hrefs in the diff output, confirming the test guards the fix."
     },
     {
       "name": "pack:check (npm run pack:check)",
       "status": "Passed",
-      "detail": "npm pack --dry-run — produced subzerodev-platform-ui-landing-page-0.4.1.tgz, 33 files, package size 33.8 kB, no errors."
+      "detail": "npm pack --dry-run — produced subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, package size 35.8 kB, no errors."
+    },
+    {
+      "name": "tools/*.Tests.ps1 (Invoke-Pester -Path tools)",
+      "status": "Passed",
+      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru — Tests Passed: 113, Failed: 0, Skipped: 0, NotRun: 0, Result: Passed, Duration 00:00:52.27."
     },
     {
       "name": "git diff --check",
@@ -38,7 +43,7 @@
     {
       "name": "Deploy self-hosted landing page and docs (.github/workflows/pages.yml)",
       "status": "DidNotRun",
-      "reason": "Dispatched against this branch (run 32230492043) but rejected before any step ran: \"Branch 'fix/43-npx-local-package-collision' is not allowed to deploy to github-pages due to environment protection rules\" — GitHub restricts the github-pages environment to the main branch, so this workflow can only be truly exercised after merge. As a substitute, the fixed step sequence (npm install --global, then generate-changelog, build, merge, run in that order from repo root) was reproduced locally against this branch's checkout end to end and all four exit 0 — confirming the npx local-package collision is gone, though the real GitHub Actions run on main after merge remains the authoritative check."
+      "reason": "Not a CI-gated check (no `# verification: true` flag on any step in this or any other workflow file — .github/gates discovery found zero flagged steps in this repo). This branch also only edits the workflow's comment block, not its run steps, and the new --base-path flag is explicitly not wired into it yet (the step installs the published npm package, which does not carry this fix until a release ships) — there is nothing in this PR's diff to that file for the workflow to actually exercise differently. The real Pages deploy on main after merge is where a change to this file's run steps would need to be checked."
     }
   ]
 }

@@ -106,6 +106,53 @@ describe("generic build", () => {
     ).toContain("First release");
   });
 
+  it("prefixes its own self-links with basePath, for subpath deploys", async () => {
+    const root = await fixture();
+    const outDir = join(root, "site", "dist");
+    await buildGeneric({
+      root,
+      readme: "README.md",
+      siteReadme: "site/README.md",
+      changelog: "CHANGELOG.md",
+      css: "site/theme.css",
+      publicDir: "site/public",
+      outDir,
+      basePath: "SubZeroDev.Platform.UI.LandingPage",
+    });
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).toContain(
+      '<link rel="stylesheet" href="/SubZeroDev.Platform.UI.LandingPage/assets/szd-base.css">',
+    );
+    expect(home).toContain(
+      '<link rel="stylesheet" href="/SubZeroDev.Platform.UI.LandingPage/assets/theme.css">',
+    );
+    expect(home).toContain(
+      '<a class="szd-brand" href="/SubZeroDev.Platform.UI.LandingPage/">',
+    );
+    expect(home).toContain(
+      '<a href="/SubZeroDev.Platform.UI.LandingPage/changelog/"',
+    );
+  });
+
+  it("defaults basePath to root-absolute when omitted", async () => {
+    const root = await fixture();
+    const outDir = join(root, "site", "dist");
+    await buildGeneric({
+      root,
+      readme: "README.md",
+      siteReadme: "site/README.md",
+      changelog: "CHANGELOG.md",
+      css: "site/theme.css",
+      publicDir: "site/public",
+      outDir,
+    });
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).toContain(
+      '/assets/szd-base.css"><link rel="stylesheet" href="/assets/theme.css"',
+    );
+    expect(home).toContain('<a class="szd-brand" href="/">');
+  });
+
   it("rejects README files without exactly one level-one heading", async () => {
     const root = await fixture();
     await writeFile(
