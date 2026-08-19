@@ -222,10 +222,10 @@ the flag reaches only the legacy generic form (**C29**).
 **`dev` selects the site through the same ladder, then branches on family.** The
 ladder decides _which_ site; the site's family decides which server — an
 adapter-family site is served by the Vite dev server however it was selected, a
-generic-family site is built and served statically. _Decided, not yet in the
-tree_ (`90-decisions.md`, 2026-08-19): today `dev` tests for an adapter file
-first and never reads the map when a plain adapter is present, so a repository
-holding both serves one site locally and ships another.
+generic-family site is built and served statically. Before UI10 `dev` tested for
+an adapter file first and never read the map when a plain adapter was present,
+so a repository holding both served one site locally and shipped another
+(`90-decisions.md`, 2026-08-19).
 
 **`preview` reads past `--adapter` and `--source-map`.** Every other input flag
 it forwards, so `preview` and `build` given the same flags describe the same
@@ -272,18 +272,18 @@ dependency graph and each module's ownership are
 [`10-design.md`](10-design.md) § _Module boundaries_; what is here is only the
 constraint each surface carries beyond its signature.
 
-| Module                                          | Surface                                                                                                       | The constraint that is not in the signature                                                                                                                                                                                                        |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`src/route.ts`](../src/route.ts)               | `assertRoutePath`, `assertRoute`, `assertUniquePaths`, `isBodyRoute`                                          | Every caller that can reach the write path must call these; the write path calls them again regardless (**C1**–**C4**)                                                                                                                             |
-| [`src/adapter.ts`](../src/adapter.ts)           | `html`, `buildAdapterConfig`, `buildAdapter`, `devAdapter`, `hasAdapter`, `loadAdapterExport`, `isDataBacked` | `html` is exported for direct testing, not for consumers. `buildAdapterConfig` is the single document writer every custom-adapter route form and input mode reaches (**C27**)                                                                      |
-| [`src/generic.ts`](../src/generic.ts)           | `buildGeneric`, `buildGenericData`, `GenericOptions`                                                          | Two entry points, one `documentHtml` — the legacy and JSON generic forms may not drift on markup (**C27**). Each entry point still composes the `GenericOptions` it feeds in, which is where they do currently differ (**C29**)                    |
-| [`src/staticServer.ts`](../src/staticServer.ts) | `createStaticServer`                                                                                          | One implementation serves `preview` and generic `dev`; a second copy is what would let them diverge on resolution, containment or content type                                                                                                     |
-| [`src/data.ts`](../src/data.ts)                 | `validateLandingPageData`, and the model types `src/index.ts` re-exports                                      | Rejects unknown fields; every rejection branch carries a negative test                                                                                                                                                                             |
-| [`src/paths.ts`](../src/paths.ts)               | `resolveFrom`, `isWithin`, `assertWithin`                                                                     | `assertWithin` is the single owner of containment; `src/generic.ts`, `src/adapter.ts` and `src/staticServer.ts` route every containment check through it (**C33**). `isWithin` does not resolve symlinks and is not a containment check on its own |
-| [`src/merge.ts`](../src/merge.ts)               | `mergeLanding`                                                                                                | Fingerprints before and after rather than trusting the copy (**C25**)                                                                                                                                                                              |
-| [`src/git.ts`](../src/git.ts)                   | `git`, `inferRepository`, `repositoryFromRemote`                                                              | `git` collapses every failure into one message naming the remedy; callers that can proceed without history catch it                                                                                                                                |
-| [`src/changelog.ts`](../src/changelog.ts)       | `generateChangelog`                                                                                           | Escapes `\`, `[` and `]` in subjects so a commit message cannot forge a Markdown link                                                                                                                                                              |
-| [`src/baseCss.ts`](../src/baseCss.ts)           | `baseCss`                                                                                                     | The `szd-` prefixes here are the semver-governed surface (**C31**)                                                                                                                                                                                 |
+| Module                                          | Surface                                                                                                       | The constraint that is not in the signature                                                                                                                                                                                                                                       |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`src/route.ts`](../src/route.ts)               | `assertRoutePath`, `assertRoute`, `assertUniquePaths`, `isBodyRoute`                                          | Every caller that can reach the write path must call these; the write path calls them again regardless (**C1**–**C4**)                                                                                                                                                            |
+| [`src/adapter.ts`](../src/adapter.ts)           | `html`, `buildAdapterConfig`, `buildAdapter`, `devAdapter`, `hasAdapter`, `loadAdapterExport`, `isDataBacked` | `html` is exported for direct testing, not for consumers. `buildAdapterConfig` is the single document writer every custom-adapter route form and input mode reaches (**C27**)                                                                                                     |
+| [`src/generic.ts`](../src/generic.ts)           | `buildGeneric`, `buildGenericData`, `GenericOptions`                                                          | Two entry points, one `documentHtml` — the legacy and JSON generic forms may not drift on markup (**C27**). Each entry point still composes the `GenericOptions` it feeds in, which is where they do currently differ (**C29**)                                                   |
+| [`src/staticServer.ts`](../src/staticServer.ts) | `createStaticServer`                                                                                          | One implementation serves `preview` and generic `dev`; a second copy is what would let them diverge on resolution, containment or content type                                                                                                                                    |
+| [`src/data.ts`](../src/data.ts)                 | `validateLandingPageData`, and the model types `src/index.ts` re-exports                                      | Rejects unknown fields; every rejection branch carries a negative test                                                                                                                                                                                                            |
+| [`src/paths.ts`](../src/paths.ts)               | `assertWithin`, `assertWithinResolved`, `assertWithinOrThrow`                                                 | The single owner of containment; `src/generic.ts`, `src/adapter.ts` and `src/staticServer.ts` route every check through it (**C33**). `assertWithinResolved` takes an already-resolved parent, for a caller that would otherwise re-resolve one root per request or per iteration |
+| [`src/merge.ts`](../src/merge.ts)               | `mergeLanding`                                                                                                | Fingerprints before and after rather than trusting the copy (**C25**)                                                                                                                                                                                                             |
+| [`src/git.ts`](../src/git.ts)                   | `git`, `inferRepository`, `repositoryFromRemote`                                                              | `git` collapses every failure into one message naming the remedy; callers that can proceed without history catch it                                                                                                                                                               |
+| [`src/changelog.ts`](../src/changelog.ts)       | `generateChangelog`                                                                                           | Escapes `\`, `[` and `]` in subjects so a commit message cannot forge a Markdown link                                                                                                                                                                                             |
+| [`src/baseCss.ts`](../src/baseCss.ts)           | `baseCss`                                                                                                     | The `szd-` prefixes here are the semver-governed surface (**C31**)                                                                                                                                                                                                                |
 
 ## Error semantics
 
@@ -319,7 +319,7 @@ and a wrong URL.
 | `changelog.ts`    | No repository can be inferred from `origin`                                                                                                                                                                                                                                                                              | Passes `--repository owner/name`                                                          |
 | `merge.ts`        | The landing build has no `index.html`; the target has no protected subtree; the landing build contains the protected path; the protected subtree changed                                                                                                                                                                 | Corrects the build or the deployment tree — a changed-subtree failure is a defect         |
 | `staticServer.ts` | Never for a request. A path outside `outDir`, an undecodable path, and a path naming no file are all a 404 with no body detail. A bind failure reaches the caller as an `'error'` event on the returned server, not a throw — `src/cli.ts` `serve` subscribes to it, because it fires after `main`'s promise has settled | Nothing; the response carries no filesystem detail by design                              |
-| `paths.ts`        | `assertWithin` throws where the candidate resolves outside the parent, both resolved through `realpath` first. **No caller reaches it today** (**C33**)                                                                                                                                                                  | Corrects the declared path                                                                |
+| `paths.ts`        | `assertWithin` and `assertWithinResolved` throw where the candidate resolves outside the parent, both sides resolved through `realpath` first. What a consumer reads is the wrapping message the calling module supplies through `assertWithinOrThrow`, with this one as `cause` (**C33**)                               | Corrects the declared path                                                                |
 
 ## Invariants
 
@@ -403,9 +403,12 @@ document. Only the code-enforced ones may be trusted without checking.
   The guarantee is **detection, not rollback** — a failure leaves a partially
   merged tree.
 - **C33** Every check that a declared path stays inside its root routes through
-  [`src/paths.ts`](../src/paths.ts) `assertWithin`, which resolves both sides
-  through `realpath` before comparing. _`src/generic.ts` `copyReferences`,
-  `src/adapter.ts` `readStyles`, `src/staticServer.ts` `resolveTarget`; code._
+  [`src/paths.ts`](../src/paths.ts) `assertWithin` or `assertWithinResolved`,
+  which between them resolve both sides through `realpath` before comparing —
+  the second takes an already-resolved parent so a caller in a loop or a
+  per-request path resolves the root once rather than on every call, and is the
+  same check either way. _`src/generic.ts` `copyReferences`, `src/adapter.ts`
+  `readStyles`, `src/staticServer.ts` `resolveTarget`; code._
   Resolving symlinks on both sides is what makes the check agree across all
   three call sites — a symlinked stylesheet, asset, or served path pointing
   outside the root is refused everywhere, not just on the one path that
@@ -417,9 +420,8 @@ document. Only the code-enforced ones may be trusted without checking.
   build, or `dev`'s startup — with nothing served. The single recovery is
   `--fallback-source-id`, which replaces the root model only where the root is
   the one source that failed. _`src/cli.ts` `prefetchWithFallback`,
-  `withDataBackedConfig`; code for `build` and for `dev` on a data-backed
-  adapter. The `dev` startup rule is **decided, not yet in the tree** for the
-  path where `dev` does not consult the ladder at all
+  `withDataBackedConfig`, `resolveJsonSite`; code on every path `build` and
+  `dev` reach, since UI10 gave `dev` the same ladder
   (`90-decisions.md`, 2026-08-19)._ Silence is the failure mode being avoided:
   nobody watches a static site the way a maintainer watches an app, and starting
   degraded would make `dev` the only path in this package that continues past a
@@ -439,10 +441,11 @@ document. Only the code-enforced ones may be trusted without checking.
   because grouping would order the list by something the consumer never wrote.
   Consumer composition code never sees a partially resolved set.
 - **C28** Mode is resolved exactly once per invocation, by the single ladder in
-  `src/cli.ts` `build`. `check` and `preview` reach it by running that `build`,
-  and `preview` passes `BuildFlags` omitting the two mode flags rather than
-  re-resolving. _`src/cli.ts`; structurally for `build`, `check` and `preview`.
-  **Decided, not yet in the tree** for `dev`, which holds its own resolution
+  `src/cli.ts` `resolveMode`. `build` and `dev` each call it rather than holding
+  a resolution of their own; `check` and `preview` reach it by running that
+  `build`, and `preview` passes `BuildFlags` omitting the two mode flags rather
+  than re-resolving. _`src/cli.ts`; structurally — `resolveMode` is the only
+  call site of `hasAdapter` and `hasSourceMap` in the file
   (`90-decisions.md`, 2026-08-19)._ A second ladder is a structural regression,
   not a duplicated few lines: it is what lets two commands disagree about which
   site a repository describes.
@@ -455,9 +458,8 @@ document. Only the code-enforced ones may be trusted without checking.
   `dataSourceIds`, wherever a prefetch has produced a runtime map — built output
   on every input mode, and `dev` where it has prefetched. Generic routes and body
   routes emit none. _`src/adapter.ts` `filteredMap`, `src/cli.ts`
-  `resolveDataBackedConfig`; code for built output. **Decided, not yet in the
-  tree** for `dev`, which resolves the map and discards it
-  (`90-decisions.md`, 2026-08-19)._ The map emitted is always the prefetched
+  `resolveDataBackedConfig`, `src/adapter.ts` `devAdapter`'s `runtimeMap`; code
+  on both paths (`90-decisions.md`, 2026-08-19)._ The map emitted is always the prefetched
   one, whose build entries are inline values and therefore depend on no scratch
   directory — so a consumer entry finds the same element with the same shape
   locally and in production. A map that had not been prefetched would send that
