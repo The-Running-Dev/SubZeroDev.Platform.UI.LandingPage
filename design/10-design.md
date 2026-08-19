@@ -108,20 +108,20 @@ that composes something. Each module's exposed surface, and the constraint each
 surface carries beyond its signature, is [`20-contract.md`](20-contract.md) § _Cross-module surface_; what
 follows is ownership and direction only.
 
-| Module                                          | Owns                                                                             | Depends on (in-package)                                            |
-| ----------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [`src/baseCss.ts`](../src/baseCss.ts)           | The semver-governed generic style surface (**C31**)                              | nothing                                                            |
-| [`src/git.ts`](../src/git.ts)                   | The subprocess boundary, and collapsing every failure of it into one message     | nothing                                                            |
-| [`src/staticServer.ts`](../src/staticServer.ts) | Serving a built tree: resolution, containment, content type                      | nothing                                                            |
-| [`src/merge.ts`](../src/merge.ts)               | The documentation-tree guard                                                     | nothing                                                            |
-| [`src/paths.ts`](../src/paths.ts)               | Filesystem containment — **but see the open question below: nothing imports it** | nothing                                                            |
-| [`src/route.ts`](../src/route.ts)               | The route grammar, the form discrimination, and uniqueness                       | type-only on `index`                                               |
-| [`src/index.ts`](../src/index.ts)               | The public type surface and the eager validation seam                            | `route`, re-exports `data`                                         |
-| [`src/data.ts`](../src/data.ts)                 | The persisted schema and its strictness                                          | `route`, types from `index`                                        |
-| [`src/changelog.ts`](../src/changelog.ts)       | Deriving entries from history, and escaping what a commit message can carry      | `git`                                                              |
-| [`src/generic.ts`](../src/generic.ts)           | The generic shell: rendering, sanitization, derived copy                         | `baseCss`, `git`, `data`                                           |
-| [`src/adapter.ts`](../src/adapter.ts)           | The single document writer, both Vite invocations, the guards over them          | `route`, types from `index`                                        |
-| [`src/cli.ts`](../src/cli.ts)                   | Flags, the precedence ladder, and every decision about which mode a site is in   | `adapter`, `generic`, `data`, `changelog`, `merge`, `staticServer` |
+| Module                                          | Owns                                                                           | Depends on (in-package)                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| [`src/baseCss.ts`](../src/baseCss.ts)           | The semver-governed generic style surface (**C31**)                            | nothing                                                            |
+| [`src/git.ts`](../src/git.ts)                   | The subprocess boundary, and collapsing every failure of it into one message   | nothing                                                            |
+| [`src/staticServer.ts`](../src/staticServer.ts) | Serving a built tree: resolution, containment, content type                    | nothing                                                            |
+| [`src/merge.ts`](../src/merge.ts)               | The documentation-tree guard                                                   | nothing                                                            |
+| [`src/paths.ts`](../src/paths.ts)               | Filesystem containment, symlinks resolved before comparing                     | nothing                                                            |
+| [`src/route.ts`](../src/route.ts)               | The route grammar, the form discrimination, and uniqueness                     | type-only on `index`                                               |
+| [`src/index.ts`](../src/index.ts)               | The public type surface and the eager validation seam                          | `route`, re-exports `data`                                         |
+| [`src/data.ts`](../src/data.ts)                 | The persisted schema and its strictness                                        | `route`, types from `index`                                        |
+| [`src/changelog.ts`](../src/changelog.ts)       | Deriving entries from history, and escaping what a commit message can carry    | `git`                                                              |
+| [`src/generic.ts`](../src/generic.ts)           | The generic shell: rendering, sanitization, derived copy                       | `baseCss`, `git`, `data`                                           |
+| [`src/adapter.ts`](../src/adapter.ts)           | The single document writer, both Vite invocations, the guards over them        | `route`, types from `index`                                        |
+| [`src/cli.ts`](../src/cli.ts)                   | Flags, the precedence ladder, and every decision about which mode a site is in | `adapter`, `generic`, `data`, `changelog`, `merge`, `staticServer` |
 
 The graph is acyclic at runtime. It has one apparent cycle — `index` imports
 `route` for values while `route` imports `index` for types — which is erased at
@@ -130,8 +130,8 @@ only while the arrow stays type-only in that direction; the moment `route`
 needed a _value_ from `index`, the shared declarations would have to move below
 both rather than the import being permitted.
 
-Two boundaries carry the load and are worth naming as boundaries rather than as
-modules:
+Three boundaries carry the load and are worth naming as boundaries rather than
+as modules:
 
 **`cli` is the only module that knows what mode a site is in.** Every other
 module is handed a resolved input and does not ask where it came from. This is
@@ -152,10 +152,15 @@ convergence. **The number to hold on to is two, and any third writer is the
 regression** — the property being protected is that no input mode gets a private
 write path, and it is a property of each family, not of the package.
 
-The one place this pattern is not followed is containment, which is
-independently implemented in three live modules and centralised in a fourth
-that nothing imports. That is the open question below, and it is stated here
-because it is a boundary defect rather than a bug in any one module.
+**Containment has one owner, `paths`, and the three modules that need it route
+through it.** It is stated as a boundary rather than left to each caller because
+an invariant implemented once per caller holds wherever someone remembered it —
+and the three implementations that preceded this decision were not even the same
+check, which is the argument against three rather than an accident of three.
+Resolving symlinks before comparing is the property that only a shared owner
+can be relied on to have. _The tree does not do this yet:_ `paths` is imported
+by nothing and the three checks are still local and still disagree
+(`90-decisions.md`, 2026-08-19).
 
 ## Control flow
 
@@ -169,17 +174,29 @@ a distinction the ladder does not make, since by then the site has already been
 selected and only its family is still in question. The ladder is a precedence
 and not a mode flag because each level exists to express something the level
 below cannot, and it is additive by construction: a consumer that acquires a
-source map without an adapter that
-declares sources builds exactly what it built before the seam existed. The one
+source map without an adapter that declares sources builds exactly what it built
+before the seam existed. The one
 inversion — a data-declaring adapter outranking the root model — is not an
 exception to that reasoning but an application of it, since such an adapter is
 that data's consumer rather than a competing description of the same site.
 
-**Developing a custom-adapter site.** Triggered by `dev` where an adapter
-module is present. A Vite dev server holds the site root; the package's own
-route middleware registers ahead of Vite's built-ins because neither a route
-path nor a stylesheet href names a file on disk, so anything registered later
-would 404 first (**C22**). Documents are generated per request by the same
+**Developing a site.** Triggered by `dev`, which resolves input mode through
+the same ladder `build` owns rather than a rule of its own — the ladder decides
+_which_ site, and the site's family then decides which server: an adapter-family
+site is served by the Vite dev server however it was selected, a generic-family
+site is built and served statically. Where `dev` has prefetched declared
+sources, it emits the resulting runtime map, so a consumer entry finds the same
+element with the same shape locally and in production; a declared source that is
+unreachable at startup ends the command rather than starting the server without
+it, because no path in this package continues past a failed declared source.
+_The tree does not do this yet:_ `dev` reads no source map when a plain adapter
+is present, and discards the runtime map it resolves
+(`90-decisions.md`, 2026-08-19).
+
+A Vite dev server holds the site root; the package's own route middleware
+registers ahead of Vite's built-ins because neither a route path nor a
+stylesheet href names a file on disk, so anything registered later would 404
+first (**C22**). Documents are generated per request by the same
 generator the build uses. A plain adapter's module is re-read per request, which
 is what makes editing it take effect; a data-backed adapter is resolved once at
 startup instead, because re-resolving per request would refetch every declared
@@ -209,21 +226,21 @@ failed transiently looks like an exception to that and is not — re-running the
 build retries it, but the package neither retries internally nor labels the
 failure transient, because it cannot distinguish a flaky host from a wrong URL.
 
-| Dependency or boundary                  | What fails                                                                       | Detected by                                     | What the system does                                                                                                               | Residue                                                                      |
-| --------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Filesystem — reads                      | A declared stylesheet, asset, or Markdown file is absent or outside the root     | An explicit check before any write              | Ends the build naming the declaration                                                                                              | None: every declared stylesheet is read before anything is written (**C16**) |
-| Filesystem — writes                     | The output directory cannot be written, or a write fails partway                 | The failing call                                | Ends the build                                                                                                                     | A partially written output tree, already cleared of its predecessor          |
-| Network / JSON dependency               | A declared build-time source cannot be fetched or does not validate              | Resolution, before any artifact is written      | Ends the build; recovers only where `--fallback-source-id` opts in and the root model is the single failure (**C12**)              | The resolution scratch directory is removed on every path                    |
-| Network — an auxiliary source           | A source other than the root fails                                               | Same                                            | Ends the build with no fallback, deliberately: a failure elsewhere says nothing about whether the root is sound                    | Same                                                                         |
-| Adapter-declared sources                | One or more of a data-backed adapter's sources is missing, non-build, or invalid | Resolution                                      | Collects every failure, reports them in declaration order, and never runs composition (**C15**)                                    | Same                                                                         |
-| Consumer adapter module                 | The module throws, or exports nothing usable                                     | Module load                                     | Ends the command naming the module and the two valid export forms                                                                  | None                                                                         |
-| Consumer Vite plugins                   | A plugin redirects output, widens the sandbox, or disables its strictness        | Guards over both the merged and resolved config | Ends the run naming what was refused (**C19**–**C21**)                                                                             | Whatever the build wrote before the guard fired                              |
-| Consumer Vite plugins — everything else | A plugin rewrites emitted HTML or asset URLs                                     | **Nothing.** Stated, not enforced (**C23**)     | The output is the consumer's; the package's layout and head guarantees no longer hold                                              | n/a                                                                          |
-| `git`                                   | The binary is absent, or the command fails                                       | The subprocess boundary                         | One message naming the remedy; the generic build catches it and continues without a repository link, `generate-changelog` does not | None                                                                         |
-| Socket bind                             | The port is in use                                                               | An asynchronous `'error'` event                 | Reported as a message and a non-zero exit, because the event fires after the command's promise has settled                         | None                                                                         |
-| Static server — a request               | A path resolves outside the tree, will not decode, or names nothing              | Resolution inside the server                    | 404 with no body detail; all three are indistinguishable to the client by design (**C6**)                                          | None                                                                         |
-| `merge`                                 | The protected subtree changed under the copy                                     | Per-file digests taken before and after         | Ends the command (**C25**)                                                                                                         | **A partially merged tree.** The guarantee is detection, not rollback        |
-| GitHub Pages                            | The deploy fails                                                                 | The workflow                                    | Outside this package; the caller owns triggers and concurrency                                                                     | Whatever Pages holds                                                         |
+| Dependency or boundary                  | What fails                                                                       | Detected by                                     | What the system does                                                                                                                                 | Residue                                                                      |
+| --------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Filesystem — reads                      | A declared stylesheet, asset, or Markdown file is absent or outside the root     | An explicit check before any write              | Ends the build naming the declaration                                                                                                                | None: every declared stylesheet is read before anything is written (**C16**) |
+| Filesystem — writes                     | The output directory cannot be written, or a write fails partway                 | The failing call                                | Ends the build                                                                                                                                       | A partially written output tree, already cleared of its predecessor          |
+| Network / JSON dependency               | A declared build-time source cannot be fetched or does not validate              | Resolution, before any artifact is written      | Ends the build — or, under `dev`, the startup; recovers only where `--fallback-source-id` opts in and the root model is the single failure (**C12**) | The resolution scratch directory is removed on every path                    |
+| Network — an auxiliary source           | A source other than the root fails                                               | Same                                            | Ends the build with no fallback, deliberately: a failure elsewhere says nothing about whether the root is sound                                      | Same                                                                         |
+| Adapter-declared sources                | One or more of a data-backed adapter's sources is missing, non-build, or invalid | Resolution                                      | Collects every failure, reports them in declaration order, and never runs composition (**C15**)                                                      | Same                                                                         |
+| Consumer adapter module                 | The module throws, or exports nothing usable                                     | Module load                                     | Ends the command naming the module and the two valid export forms                                                                                    | None                                                                         |
+| Consumer Vite plugins                   | A plugin redirects output, widens the sandbox, or disables its strictness        | Guards over both the merged and resolved config | Ends the run naming what was refused (**C19**–**C21**)                                                                                               | Whatever the build wrote before the guard fired                              |
+| Consumer Vite plugins — everything else | A plugin rewrites emitted HTML or asset URLs                                     | **Nothing.** Stated, not enforced (**C23**)     | The output is the consumer's; the package's layout and head guarantees no longer hold                                                                | n/a                                                                          |
+| `git`                                   | The binary is absent, or the command fails                                       | The subprocess boundary                         | One message naming the remedy; the generic build catches it and continues without a repository link, `generate-changelog` does not                   | None                                                                         |
+| Socket bind                             | The port is in use                                                               | An asynchronous `'error'` event                 | Reported as a message and a non-zero exit, because the event fires after the command's promise has settled                                           | None                                                                         |
+| Static server — a request               | A path resolves outside the tree, will not decode, or names nothing              | Resolution inside the server                    | 404 with no body detail; all three are indistinguishable to the client by design (**C6**)                                                            | None                                                                         |
+| `merge`                                 | The protected subtree changed under the copy                                     | Per-file digests taken before and after         | Ends the command (**C25**)                                                                                                                           | **A partially merged tree.** The guarantee is detection, not rollback        |
+| GitHub Pages                            | The deploy fails                                                                 | The workflow                                    | Outside this package; the caller owns triggers and concurrency                                                                                       | Whatever Pages holds                                                         |
 
 Two of those rows are the design's real positions rather than incidental
 behaviour, and both are the same position twice. **Silence is the failure being
@@ -332,49 +349,10 @@ ones a reader is least likely to check twice
 
 ## Open questions
 
-**`dev` and `build` disagree about which mode a site is in.** Where a source map
-and a plain adapter module are both present, `build` selects the root JSON model
-and `dev` selects the adapter, so the same repository serves one site locally
-and ships another. The precedence is stated over input resolution generally in
-[`20-contract.md`](20-contract.md) § _CLI_, in `README.md`, and in the
-documentation site; `src/cli.ts` implements it in `build` and inverts it in
-`dev`. This is a contradiction about meaning, not a description that drifted, so
-it is not corrected here: **one of the two is wrong and which one is yours to
-say.** The contract outranks the code in this repository's own precedence order,
-and `dev` is the command whose divergence is invisible until something ships, so
-the recommendation is that the code is the wrong side and `dev` should consult
-the ladder rather than hold its own. The alternative — that `dev` deliberately
-prefers a local adapter over a published model — is defensible, and if it is the
-intent then it is an unstated exception rather than a defect, and belongs in the
-contract.
-
-**Whether `dev` emits the runtime source map, now that it sometimes has one**
-(issue #39). That question was filed when `dev` did no resolution at all, and
-the answer then was that a faithful map cannot exist before a build has run.
-That reasoning no longer covers every path: a data-backed adapter under `dev`
-resolves at startup, and the resulting map carries its build-time payloads
-inline, so it depends on no scratch directory and could be emitted as-is —
-`dev` currently discards it. Deciding this needs two things only you can settle:
-whether local and shipped behaviour agreeing is worth `dev` acquiring the
-emission, and what `dev` should do when a declared source is unreachable at
-startup — refuse to start, consistent with **C12**, or start degraded, which no
-other path in this package does. The recommendation is to emit on the one path
-where a faithful map already exists and to refuse to start on an unreachable
-source, keeping the failure rule uniform; the cost is that a developer with no
-network cannot start the server.
-
-**Whether filesystem containment has an owner.** Three modules each implement
-their own containment check by string comparison — and not the same check: one
-rejects an absolute or exactly-`..` relative path, one compares against a
-resolved boundary, one tests only for a leading traversal. A fourth module
-exists to own this, resolves symlinks before comparing, and **is imported by
-nothing in the source or the tests**; the contract nonetheless lists it as a
-cross-module surface with a constraint about that symlink resolution, which is
-therefore a promise about a caller that does not exist. Two readings: it is dead
-code and should be deleted along with the contract row, or it is the intended
-owner and was never wired up, in which case the three live checks gain symlink
-resolution they currently lack. The recommendation is the second — the checks
-being inconsistent with each other is the argument that they should not be three
-— but it is a narrowing of behaviour on shipped paths and so is yours to
-authorise. Either way the contract row is currently false, and correcting it
-belongs to `/contract`.
+None. The three this rewrite raised were put to the owner and answered the same
+day; each is logged in [`90-decisions.md`](90-decisions.md) with its rejected
+alternatives, and the design above states the decided behaviour rather than the
+question. All three describe behaviour the tree does not yet have; the two
+places that shows are marked _the tree does not do this yet_. The contract's
+cross-module surface row for `paths` is false until the containment decision
+lands, and correcting it is `/contract`'s.
