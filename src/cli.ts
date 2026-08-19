@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -20,6 +19,7 @@ import {
   type GenericOptions,
 } from "./generic.js";
 import { mergeLanding } from "./merge.js";
+import { createStaticServer } from "./staticServer.js";
 import { validateLandingPageData } from "./data.js";
 import {
   createJsonLoader,
@@ -282,13 +282,26 @@ async function buildAdapterData(
   }
 }
 
-async function build(outDir = options.outDir): Promise<void> {
+/**
+ * `adapterFlag`/`sourceMapFlag`/`sourceMapWasGiven` default to the parsed CLI
+ * flags so `build`, `check` and `dev` behave as before. `preview` passes
+ * `undefined`/`undefined`/`false` instead, so it always runs the same build
+ * the site's mode already uses regardless of what `--adapter` or
+ * `--source-map` name — it reads no adapter module and no source map of its
+ * own (design/20-contract.md, "Serving built output").
+ */
+async function build(
+  outDir = options.outDir,
+  adapterFlag = parsed.adapter,
+  sourceMapFlag = parsed["source-map"],
+  sourceMapWasGiven = sourceMapArgument,
+): Promise<void> {
   await rm(outDir, { recursive: true, force: true });
   const sourceMapPath = resolve(
     root,
-    parsed["source-map"] ?? "site/sources.public.yml",
+    sourceMapFlag ?? "site/sources.public.yml",
   );
-  const adapter = parsed.adapter ?? "site/landing.config.ts";
+  const adapter = adapterFlag ?? "site/landing.config.ts";
   const adapterExists = await hasAdapter(root, adapter);
   if (
     await (async () => {
@@ -312,7 +325,7 @@ async function build(outDir = options.outDir): Promise<void> {
       }
     }
     await buildJsonData(outDir, sourceMapPath);
-  } else if (sourceMapArgument)
+  } else if (sourceMapWasGiven)
     throw new Error(`JSON source map not found at '${sourceMapPath}'.`);
   else if (adapterExists) await buildAdapter(root, adapter, outDir);
   else await buildGeneric({ ...options, outDir });
@@ -362,26 +375,24 @@ async function main(): Promise<void> {
       return;
     }
     await build();
-    const server = createServer(async (request, response) => {
-      const relative =
-        request.url === "/"
-          ? "index.html"
-          : (request.url?.replace(/^\//, "") ?? "index.html");
-      const target = join(
-        options.outDir,
-        relative.endsWith("/") ? `${relative}index.html` : relative,
-      );
-      const data = await readFile(target).catch(() => undefined);
-      response.writeHead(data ? 200 : 404);
-      response.end(data ?? "Not found");
+    const server = createStaticServer(options.outDir);
+    server.listen(Number(parsed.port ?? "4173"), "127.0.0.1", () => {
+      const { port } = server.address() as { port: number };
+      console.log(`http://127.0.0.1:${port}`);
     });
-    server.listen(Number(parsed.port ?? "4173"), "127.0.0.1", () =>
-      console.log(`http://127.0.0.1:${parsed.port ?? "4173"}`),
-    );
+    return;
+  }
+  if (command === "preview") {
+    await build(options.outDir, undefined, undefined, false);
+    const server = createStaticServer(options.outDir);
+    server.listen(Number(parsed.port ?? "4173"), "127.0.0.1", () => {
+      const { port } = server.address() as { port: number };
+      console.log(`http://127.0.0.1:${port}`);
+    });
     return;
   }
   throw new Error(
-    "Usage: subzerodev-platform-ui-landing-page <dev|build|check|generate-changelog|merge>",
+    "Usage: subzerodev-platform-ui-landing-page <dev|build|preview|check|generate-changelog|merge>",
   );
 }
 

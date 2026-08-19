@@ -15,6 +15,18 @@ The default inputs are `README.md`, `CHANGELOG.md`, optional `site/README.md`,
 optional `site/theme.css`, and optional `site/public/`. The build writes
 `site/dist/` with `/` and `/changelog/`.
 
+## Commands
+
+- `build` writes the built site to `site/dist/` (or `--out-dir`).
+- `dev` serves the site locally, rebuilding on each request.
+- `preview` builds, then serves the real built output — the same tree `build`
+  writes, fingerprinted asset names and all — on `--out-dir` (default
+  `site/dist/`) and `--port` (default `4173`).
+- `check` builds into a discarded temporary directory, to verify the build
+  succeeds without writing `site/dist/`.
+- `merge` copies a built site into a docs deployment tree without touching a
+  protected path.
+
 ## JSON site data
 
 > Requires `subzerodev-platform-ui-landing-page@0.4.1`, which the quick start
