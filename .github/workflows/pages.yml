@@ -13,18 +13,20 @@ name: Deploy self-hosted landing page and docs
 # and `merge` CLI commands consumed below via npx, pinned to the published
 # version, the same way any external consumer's workflow would.
 #
-# Known limitation: the generic-mode shell hardcodes root-absolute paths —
-# its nav links (`/`, `/changelog/`) and, more consequentially, its own
-# stylesheet links (`/assets/szd-base.css`, `/assets/theme.css`). This
-# repository has no custom domain, so the site deploys to the default GitHub
-# Pages project subpath
+# Formerly a known, accepted limitation: the generic-mode shell hardcoded
+# root-absolute paths — its nav links (`/`, `/changelog/`) and, more
+# consequentially, its own stylesheet links (`/assets/szd-base.css`,
+# `/assets/theme.css`). This repository has no custom domain, so the site
+# deploys to the default GitHub Pages project subpath
 # (https://the-running-dev.github.io/SubZeroDev.Platform.UI.LandingPage/)
-# rather than a domain root, and every one of those paths resolves above the
-# deployed site. So the landing page and `/changelog/` render as unstyled
-# HTML with two dead nav links, not merely styled pages with dead links —
-# the same reason GameEngine uses a custom domain. Left as a known, accepted
-# limitation rather than worked around here. Only `--docs-url` below is
-# caller-supplied and therefore base-prefixed to resolve correctly.
+# rather than a domain root, and every one of those paths resolved above the
+# deployed site — the same reason GameEngine uses a custom domain. Fixed via
+# a `--base-path` flag (issue #48); not yet wired in below because this step
+# installs the published package (`PACKAGE_VERSION`), which does not carry
+# the fix until a release ships. Add `--base-path
+# /SubZeroDev.Platform.UI.LandingPage/` to the "Build landing page" step
+# below once `PACKAGE_VERSION` is bumped to a release that includes it. See
+# design/90-decisions.md.
 
 on:
   push:

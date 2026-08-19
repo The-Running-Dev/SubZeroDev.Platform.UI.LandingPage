@@ -46,6 +46,7 @@ const parsed = parseArgs({
     "repository-url": { type: "string" },
     "canonical-url": { type: "string" },
     "docs-url": { type: "string" },
+    "base-path": { type: "string" },
     ref: { type: "string" },
     repository: { type: "string" },
     output: { type: "string" },
@@ -74,6 +75,7 @@ const options: GenericOptions = {
   repositoryUrl: parsed["repository-url"],
   canonicalUrl: parsed["canonical-url"],
   docsUrl: parsed["docs-url"],
+  basePath: parsed["base-path"],
 };
 
 const sourceMapArgument = process.argv
