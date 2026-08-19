@@ -162,6 +162,59 @@ build — an unstyled site that still builds and deploys is exactly the silent
 failure this package avoids elsewhere. Declaring `styles: []`, or omitting it,
 emits no link and no default.
 
+### Consumer Vite plugins
+
+A custom-adapter site may declare its own Vite plugins — a React site needs
+`@vitejs/plugin-react` for Fast Refresh under `dev`, which the package cannot
+supply on its own:
+
+```ts
+export default defineLandingPage({
+  plugins: [react()],
+  routes: [
+    {
+      path: "/",
+      entry: "src/main.tsx",
+      metadata: { title: "Home", description: "Home page" },
+    },
+  ],
+});
+```
+
+`plugins` lives on `LandingPageConfig` only — a JSON `AdapterLandingPageData`
+model cannot declare one, because a plugin is code and a fetched JSON document
+must never name something the builder then executes; that asymmetry with
+`styles` is deliberate. A site composed by `defineLandingPageData` returns a
+`LandingPageConfig`, so it declares plugins the same way. One declared list
+reaches both `build` and `dev`.
+
+Declaring no plugins changes nothing: the emitted entry HTML, the `/`-relative
+entry paths, `publicDir` staging and site-wide stylesheet links are exactly
+what they were. Declaring one does — a plugin can rewrite emitted HTML and
+asset URLs, so the static-head, route-path and output-layout guarantees above
+hold only for a site that declares none; where one is declared, its output is
+on the consumer, the same way a site-wide stylesheet's content is never
+validated by this package, only its path and containment are.
+
+Four things stay package-owned regardless of what a plugin declares, and each
+refuses rather than silently narrowing:
+
+- **Position.** The package's own plugin — the route middleware that answers
+  every declared route — keeps its position ahead of Vite's built-in
+  middleware; consumer plugins follow it, in declaration order.
+- **The Vite config file.** `configFile: false` is unconditional, so a plugin
+  cannot reintroduce a consumer-owned `vite.config.ts` — the duplication the
+  adapter exists to remove.
+- **`build.outDir`.** It stays exactly the directory the adapter was called
+  with. A plugin that redirects it ends the build naming the directory it
+  asked for, since the step that lifts generated entry documents into place
+  trusts `outDir` unconditionally.
+- **The dev server's filesystem sandbox.** `server.fs.allow` stays exactly the
+  site root plus the resolved `allow` entries, and `server.fs.strict` stays
+  on. A plugin that tries to widen either — by declaring it in a `config`
+  hook, or by mutating the running server directly — ends the run naming what
+  it tried to add, rather than taking effect.
+
 ## JSON-backed site data
 
 > Requires `subzerodev-platform-ui-landing-page@0.4.1` and
@@ -274,9 +327,9 @@ sources:
 
 The builder emits exactly those declared sources — filtered from the public
 map, escaped, and inert — as a `<script type="application/json"
-id="szd-json-sources">` immediately before the route's module script. The
-`</` sequence is escaped so the payload cannot terminate the script early.
-The `szd-json-sources` id is part of the public DOM contract. The package
+id="szd-json-sources">` immediately before the route's module script. Every
+`<` in the payload is escaped so it cannot terminate the script early. The
+`szd-json-sources` id is part of the public DOM contract. The package
 never constructs a browser loader itself; the entry module owns parsing the
 element and building one, for example with `subzerodev-data-json`:
 
@@ -295,6 +348,13 @@ const status = await loader.loadById("status");
 
 Generic and body routes never emit `#szd-json-sources` and make no runtime
 data request — there is no script on those pages to read one.
+
+This element is a property of built output, not source: the map it carries is
+the prefetched one, whose build-time entries hold their resolved payload
+rather than the path or URL the public map declared. `dev` therefore emits no
+`#szd-json-sources` at all for an entry route, rather than one carrying a map
+production never sends — an entry module that reads the element must already
+tolerate its absence, the same tolerance a generic or body route requires.
 
 ### Falling back when a source fails
 
@@ -377,6 +437,43 @@ sources is unaffected, and the root model is used — so adding this composition
 style changes no existing build. `--fallback-source-id` does not apply here:
 there is no root model to replace. An adapter declaring sources with no source
 map present is an error.
+
+## Developing and looking at the built site
+
+`dev` serves the site locally. A custom-adapter site is served through Vite's
+dev server, which transforms on request, so an edit to a component or an entry
+module shows up without a restart. A generic site, and a custom-adapter site
+composed by `defineLandingPageData`, instead build once at startup and serve
+that output — re-resolving declared sources or re-rendering Markdown on every
+request would refetch every source on every navigation, so an edit there needs
+a restart. Declared site-wide `styles` are linked and served under `dev` the
+same as in a build; `#szd-json-sources` is not, for the reason given
+[above](#runtime-data-on-an-entry-route) — it is a property of the build the
+dev server never runs.
+
+`preview` builds, then serves the real built output — the same tree `build`
+writes, with its generated route documents, fingerprinted asset names and
+copied public files, rather than the dev server's approximation of them —
+on `--out-dir` (default `site/dist/`) and `--port` (default `4173`). It reads
+the same input flags `build` already reads, so `preview` and `build` given the
+same flags describe the same site; `--adapter` and `--source-map`, which
+select which mode a site is in, are the exception — mode is resolved once,
+inside the `build` that `preview` runs, and never a second time. There is no
+`--no-build` flag and no absent-`outDir` error: `preview` always shows the
+current source rather than a build that may be stale by however long it has
+been since the last one ran.
+
+One static server implementation serves both `preview` and generic `dev`, so
+the two cannot disagree about how a request resolves. A request path is
+percent-decoded once and resolved against `outDir`; a path that is `/`, ends
+in `/`, or names a directory resolves to that directory's `index.html`, so a
+route path and the URL a reader types for it name the same document. A query
+string or fragment never reaches the filesystem. A path resolving outside
+`outDir` is never read — it is a 404, the same response given to a path naming
+no file, and neither response carries filesystem detail. Every 200 carries a
+`Content-Type` derived from the file's extension, which matters beyond
+cosmetics: a built adapter route loads its bundle as a module script, and a
+module served without a JavaScript media type does not execute.
 
 ## Generic CSS and DOM contract
 
