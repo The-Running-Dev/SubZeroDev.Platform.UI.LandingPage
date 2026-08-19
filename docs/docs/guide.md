@@ -21,7 +21,7 @@ owns the build and the deploy mechanics; everything the site says is yours.
 ## Install and build
 
 ```powershell
-npm install --save-dev subzerodev-platform-ui-landing-page@0.4.1
+npm install --save-dev subzerodev-platform-ui-landing-page@0.5.0
 subzerodev-platform-ui-landing-page build
 ```
 
@@ -34,6 +34,20 @@ During `0.x`, pin the exact package version and the exact commit SHA of any
 GitHub Actions workflow you consume from this repository — there is no
 semantic-versioning guarantee yet. A `1.0.0` release will start using major
 versions for breaking CSS or DOM changes.
+
+## Commands
+
+- **`build`** resolves the site through the precedence below and writes it to
+  `site/dist/` (or `--out-dir`).
+- **`dev`** resolves the site through the same precedence, then serves it
+  locally — see [Developing and looking at the built site](#developing-and-looking-at-the-built-site).
+- **`preview`** builds, then serves the exact tree `build` just wrote.
+- **`check`** runs the same build `build` does, so CI can confirm the site
+  still builds.
+- **`generate-changelog`** derives changelog entries from first-parent Git
+  history — see [Deploying](#deploying).
+- **`merge`** copies a built site into a documentation deployment tree
+  without touching a protected path — see [Deploying](#deploying).
 
 ## Which input the build uses
 
@@ -508,10 +522,45 @@ Pages. Deployment policy — permissions, triggers, concurrency, and
 environments — is the calling repository's to set; this package only supplies
 the build and merge steps.
 
-`merge` combines the landing build with a documentation subtree by
-fingerprinting every file in that subtree both before and after the copy and
-failing on any difference, rather than trusting the landing build not to
-contain a colliding path.
+`merge` combines the landing build with a documentation subtree:
+`--landing-dist` names the built landing site, `--docs-output` (default
+`artifacts/docs`) is the target tree, and `--protected-path` (default `docs`)
+is the subtree that must not change. It refuses a landing build with no
+`index.html`, a target with no protected subtree, and a landing build that
+itself contains the protected path — but the guarantee it actually rests on is
+the fingerprint: every file under the protected path is hashed with SHA-256
+both before and after the copy, and any difference ends the command, rather
+than trusting the landing build not to contain a colliding path. That
+guarantee is detection, not rollback — a failure leaves a partially merged
+tree behind.
+
+### Deploying under a subpath
+
+`--base-path` normalises to a leading and trailing `/` and defaults to `/`.
+It prefixes the generic shell's own self-links and stylesheet hrefs, so a
+site deployed under a project subpath still addresses its own documents. It
+does not reach the custom-adapter forms, whose entry paths are already
+`/`-relative to the site root Vite is given — it is a deployment concern, not
+a content one, which is why it is a flag rather than a field on the JSON
+model.
+
+Today it reaches only the legacy README/CHANGELOG generic form. A JSON
+`kind: "generic"` model does not receive it yet, so a JSON-backed generic
+site deployed under a project subpath emits root-absolute links regardless of
+the flag. This is a known, decided gap rather than an oversight — treat it as
+a trap if you move a legacy generic site to JSON-backed data while deployed
+under a subpath.
+
+### Generating a changelog
+
+`generate-changelog` derives entries from first-parent Git history, newest
+first, inferring the repository from the `origin` remote unless
+`--repository owner/name` is given. One entry is emitted per first-parent
+commit; a subject ending in `(#<digits>)` becomes a pull-request link, and a
+subject matching `update changelog` is dropped so the command's own commits
+never accumulate in its own output. `--check` compares against the existing
+file instead of writing, normalising CRLF first so the check passes on a
+Windows checkout.
 
 ## Development
 
