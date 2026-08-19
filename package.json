@@ -1,6 +1,6 @@
 {
   "name": "subzerodev-platform-ui-landing-page",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Static README and changelog landing-site builder",
   "license": "MIT",
   "type": "module",
