@@ -1,5 +1,30 @@
 # Decisions
 
+### 2026-08-19 — The reusable Pages workflow owns its permissions and environment
+
+Context: `/contract` compared `AGENTS.md` § _Project identity_ against the tree
+and found the line "callers provide permissions, triggers, concurrency, and
+environments" false of two of its four items. `.github/workflows/deploy-pages.yml`
+declares neither a trigger nor concurrency, so those halves hold; its `deploy`
+job declares both `permissions` and `environment: github-pages`. The environment
+half is not a choice the workflow made — `workflow_call` exposes only `inputs`
+and `secrets`, so no caller has a mechanism to supply a called job's environment,
+and `actions/deploy-pages` requires one.
+
+Chosen: narrow the identity line to triggers and concurrency, and state that the
+deploy job's permissions and environment are the workflow's own, with the reason.
+The document was the side that was wrong.
+
+Rejected: dropping `permissions` from the called job so it inherits the caller's
+— it only closes half the gap, since `environment` cannot move regardless, and it
+breaks every existing caller that does not already declare `pages: write` and
+`id-token: write`. Rejected: leaving both and filing an issue — the misleading
+line sits in the binding agent contract meanwhile, and the answer was not in
+doubt. Rejected: reading "callers provide" as policy-in-spirit — an identity
+statement that cannot be checked against the tree is the kind that rots.
+
+Reversibility: cheap — one paragraph in `AGENTS.md`.
+
 ### 2026-08-19 — The dev server owes the built document's stylesheet links, but not its source map
 
 Context: `/reconcile` found two contract statements true of `build` and false of
