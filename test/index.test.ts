@@ -215,6 +215,16 @@ describe("LandingPageData", () => {
       "unknown field 'repositoryUrl'",
     ],
     [
+      "an adapter declaring plugins (UI8.7)",
+      {
+        version: 1,
+        kind: "adapter",
+        plugins: [{ name: "x" }],
+        routes: [{ path: "/", body: "<main>Home</main>", metadata }],
+      },
+      "unknown field 'plugins'",
+    ],
+    [
       "an unsupported version",
       {
         version: 2,

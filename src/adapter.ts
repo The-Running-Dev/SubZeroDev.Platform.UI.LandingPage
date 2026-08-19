@@ -16,7 +16,7 @@ import {
   resolve,
 } from "node:path";
 import { pathToFileURL } from "node:url";
-import { build as viteBuild, createServer } from "vite";
+import { build as viteBuild, createServer, type PluginOption } from "vite";
 import { tsImport } from "tsx/esm/api";
 import type { LandingPageConfig, LandingPageDataConfig } from "./index.js";
 import type { SourceMap } from "subzerodev-data-json";
@@ -293,6 +293,31 @@ async function stagePublicDir(
   return staged;
 }
 
+/**
+ * Refuses a consumer plugin's attempt to redirect build output away from the
+ * caller-supplied `outDir`. The post-build copy step below trusts `outDir`
+ * unconditionally, so a redirected build would either leave nothing there to
+ * copy (an ENOENT) or, if something already exists at that path for unrelated
+ * reasons, risk operating on it instead.
+ */
+function buildOutDirGuardPlugin(
+  siteRoot: string,
+  outDir: string,
+): PluginOption {
+  return {
+    name: "szd-adapter-build-outdir-guard",
+    enforce: "post",
+    config(userConfig) {
+      const configured = userConfig.build?.outDir;
+      if (configured === undefined) return;
+      if (resolve(siteRoot, configured) !== resolve(outDir))
+        throw new Error(
+          `A declared Vite plugin changed build.outDir to '${configured}'. Vite plugins may not redirect build output.`,
+        );
+    },
+  };
+}
+
 export async function buildAdapterConfig(
   root: string,
   siteRoot: string,
@@ -337,6 +362,10 @@ export async function buildAdapterConfig(
       root: siteRoot,
       configFile: false,
       publicDir,
+      plugins: [
+        ...(config.plugins ?? []),
+        buildOutDirGuardPlugin(siteRoot, outDir),
+      ],
       build: { outDir, emptyOutDir: false, rollupOptions: { input } },
     });
     const emitted = join(outDir, basename(temporary));
@@ -350,6 +379,80 @@ export async function buildAdapterConfig(
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+}
+
+function normalizeFsPath(path: string): string {
+  return path.replace(/[\\/]+$/, "");
+}
+
+function widenedAllowError(extra: readonly string[]): Error {
+  return new Error(
+    `A declared Vite plugin widened server.fs.allow with: ${extra.join(", ")}. Widen the adapter's own 'allow' field instead.`,
+  );
+}
+
+/**
+ * Refuses a consumer plugin's attempt to widen `server.fs.allow`, or disable
+ * `server.fs.strict` (the flag that makes `allow` mean anything), beyond what
+ * the adapter itself resolved.
+ *
+ * A plugin can declare either through its `config()` hook, or — since Vite
+ * never freezes the resolved config — by mutating the already-resolved server
+ * directly from its own `configureServer` hook, after config resolution has
+ * run. Both are checked here:
+ *
+ * `config()` runs with `enforce: "post"`, after every other plugin's `config`
+ * hook — including a consumer's own `enforce: "post"` plugin, since Vite
+ * preserves array order within an enforce tier — so it sees the fully merged
+ * allow list Vite would otherwise use, before Vite's own defaulting (which
+ * adds entries such as its client directory) runs. Throwing here rejects
+ * `createServer` outright for a widening declared through `config()`.
+ *
+ * `configureServer` also runs `enforce: "post"`, so — by the same ordering —
+ * it runs after every other plugin's `configureServer`, including one that
+ * mutates the resolved server directly. It compares the live server against
+ * the snapshot taken in `configResolved`, which fires once resolution
+ * (including Vite's own defaulting) has completed but before any
+ * `configureServer` hook runs, and closes the server before it listens if the
+ * live state has drifted from that snapshot.
+ */
+function fsAllowGuardPlugin(allowed: readonly string[]): PluginOption {
+  const normalizedAllowed = allowed.map(normalizeFsPath);
+  let trusted: { allow: readonly string[]; strict: boolean | undefined };
+  return {
+    name: "szd-adapter-fs-allow-guard",
+    enforce: "post",
+    config(userConfig) {
+      const configured = (userConfig.server?.fs?.allow ?? []).map(
+        normalizeFsPath,
+      );
+      const extra = configured.filter(
+        (entry) => !normalizedAllowed.includes(entry),
+      );
+      if (extra.length > 0) throw widenedAllowError(extra);
+      if (userConfig.server?.fs?.strict === false)
+        throw new Error(
+          "A declared Vite plugin disabled server.fs.strict, which enforces the fs.allow list.",
+        );
+    },
+    configResolved(resolvedConfig) {
+      trusted = {
+        allow: resolvedConfig.server.fs.allow.map(normalizeFsPath),
+        strict: resolvedConfig.server.fs.strict,
+      };
+    },
+    configureServer(server) {
+      const fs = server.config.server.fs;
+      if (fs.strict === false && trusted.strict !== false)
+        throw new Error(
+          "A declared Vite plugin disabled server.fs.strict, which enforces the fs.allow list.",
+        );
+      const extra = (fs.allow ?? [])
+        .map(normalizeFsPath)
+        .filter((entry) => !trusted.allow.includes(entry));
+      if (extra.length > 0) throw widenedAllowError(extra);
+    },
+  };
 }
 
 export async function devAdapter(
@@ -408,6 +511,8 @@ export async function devAdapter(
           });
         },
       },
+      ...(config.plugins ?? []),
+      fsAllowGuardPlugin(allowed),
     ],
   });
   await server.listen();
