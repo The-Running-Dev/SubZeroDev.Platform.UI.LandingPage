@@ -651,6 +651,15 @@ Staging only. Once an item becomes a GitHub issue, `/track` removes it from here
   step — and so a decision about whether `dev` resolves declared sources at all,
   and what it does when a remote one is unreachable at startup. `/design`'s
   question; `/track` to file it.
+- **A Claude-managed worktree under `.claude/worktrees/` breaks the lint gate and
+  silently doubles the test gate.** Flat-config ESLint never reads `.gitignore`, so
+  `npm run lint` walks the worktree and fails with 43 `tsconfigRootDir` parsing
+  errors that have nothing to do with the source; `vitest run` collects the
+  worktree's nine suites alongside the repository's own, so every count it reports
+  is inflated and a stale copy can pass or fail on its own history. `eslint.config.js`
+  already names `docs/build/` for exactly this reason and needs `.claude/` beside
+  it, with the vitest `exclude` matched to it. Found while running the gates for
+  this reconciliation, on a worktree this session did not create.
 - **`docs/docs/guide.md` is stale by two slices.** It documents neither
   "Serving built output" nor "Consumer Vite plugins" — no mention of `preview`,
   `dev`, `plugins`, or the shared static server — and states that `</` is escaped
