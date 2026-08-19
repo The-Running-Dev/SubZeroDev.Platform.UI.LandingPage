@@ -1,7 +1,8 @@
+import { realpathSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { join, resolve, sep } from "node:path";
-import { assertWithin } from "./paths.js";
+import { assertWithinResolved } from "./paths.js";
 
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
@@ -32,10 +33,11 @@ function contentTypeFor(path: string): string {
 }
 
 /**
- * Resolves a request pathname to a candidate path under `root`. Percent-decoded
- * once before resolution, so a `..` segment — literal or percent-escaped — can
+ * Resolves a request pathname to a candidate path under `root`, or `undefined`
+ * when it decodes to something lexically outside it. Percent-decoded once
+ * before resolution, so a `..` segment — literal or percent-escaped — can
  * never escape `root` lexically; containment against a symlinked candidate is
- * decided by `resolveTarget`, through `assertWithin`.
+ * decided separately by `resolveTarget`, through `assertWithinResolved`.
  */
 function resolveWithinRoot(root: string, pathname: string): string | undefined {
   let decoded: string;
@@ -44,17 +46,24 @@ function resolveWithinRoot(root: string, pathname: string): string | undefined {
   } catch {
     return undefined;
   }
-  return resolve(root, `.${decoded}`);
+  const target = resolve(root, `.${decoded}`);
+  const boundary = root.endsWith(sep) ? root : root + sep;
+  if (target !== root && !target.startsWith(boundary)) return undefined;
+  return target;
 }
 
 /**
  * Resolves a request pathname to a path inside `root`, or `undefined` when the
  * candidate — after any directory-index rewrite — cannot be read (it does not
- * exist) or resolves outside `root` through a symlink. `assertWithin` decides
- * containment for every case; nothing here compares paths itself (**C33**).
+ * exist) or resolves outside `root` through a symlink. `realRoot` is `root`
+ * already resolved through `realpath` once for the server's lifetime, so this
+ * doesn't re-resolve it on every request. `assertWithinResolved` decides
+ * symlink containment for every case; nothing here compares paths itself
+ * (**C33**).
  */
 async function resolveTarget(
   root: string,
+  realRoot: string,
   pathname: string,
 ): Promise<string | undefined> {
   const candidate = resolveWithinRoot(root, pathname);
@@ -67,7 +76,7 @@ async function resolveTarget(
     if (stats?.isDirectory()) target = join(candidate, "index.html");
   }
   try {
-    await assertWithin(root, target, "Requested path");
+    await assertWithinResolved(realRoot, target, "Requested path");
   } catch {
     return undefined;
   }
@@ -98,9 +107,14 @@ function pathnameOf(requestTarget: string | undefined): string {
  */
 export function createStaticServer(outDir: string): Server {
   const root = resolve(outDir);
+  const realRoot = realpathSync(root);
   return createServer((request, response) => {
     void (async () => {
-      const target = await resolveTarget(root, pathnameOf(request.url));
+      const target = await resolveTarget(
+        root,
+        realRoot,
+        pathnameOf(request.url),
+      );
       const data = target
         ? await readFile(target).catch(() => undefined)
         : undefined;

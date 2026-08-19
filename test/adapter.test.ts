@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { LandingPageConfig } from "../src/index.js";
 import {
   buildAdapter,
   buildAdapterConfig,
@@ -485,7 +486,7 @@ describe("custom adapter", () => {
     );
     await expect(
       buildAdapter(root, "site/landing.config.ts", join(site, "dist")),
-    ).rejects.toThrow();
+    ).rejects.toThrow("resolves outside the repository root");
 
     const site2 = join(root, "site2");
     await mkdir(site2, { recursive: true });
@@ -494,9 +495,42 @@ describe("custom adapter", () => {
       `export default { styles: [".."], routes: [{ path: "/", body: "<p>page</p>", metadata: { title: "Home", description: "Home page" } }] };`,
       "utf8",
     );
+    // Asserted on message, not just rejection: `resolve(root, "..")` is a real,
+    // readable directory, so a check that only ran after an unconditional read
+    // would instead fail here with "could not be read" — this pins the
+    // containment check, specifically, as what rejects this case.
     await expect(
       buildAdapter(root, "site2/landing.config.ts", join(site2, "dist")),
-    ).rejects.toThrow();
+    ).rejects.toThrow("resolves outside the repository root");
+  });
+
+  it("rejects a pre-resolved config with duplicate route paths under dev, the same as build (UI11.9)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(site, { recursive: true });
+    await writeFile(
+      join(site, "landing.config.ts"),
+      "export default {};",
+      "utf8",
+    );
+    const config: LandingPageConfig = {
+      routes: [
+        {
+          path: "/",
+          body: "<p>a</p>",
+          metadata: { title: "A", description: "A" },
+        },
+        {
+          path: "/",
+          body: "<p>b</p>",
+          metadata: { title: "B", description: "B" },
+        },
+      ],
+    };
+    await expect(
+      devAdapter(root, "site/landing.config.ts", config),
+    ).rejects.toThrow(/duplicate/i);
   });
 
   it("serves a config-based adapter's routes over the dev server, reloading the config on each request (#10)", async () => {

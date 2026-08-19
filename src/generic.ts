@@ -9,7 +9,7 @@ import { unified } from "unified";
 import { baseCss } from "./baseCss.js";
 import { inferRepository } from "./git.js";
 import type { GenericLandingPageData, LandingPageMarkdown } from "./data.js";
-import { assertWithin } from "./paths.js";
+import { assertWithin, assertWithinOrThrow } from "./paths.js";
 
 export type GenericOptions = {
   root: string;
@@ -102,13 +102,10 @@ async function copyReferences(
     const input = resolve(sourceDir, withoutFragment);
     if (!(await exists(input)))
       throw new Error(`Missing local asset '${original}' in '${sourcePath}'.`);
-    try {
-      await assertWithin(root, input, `Asset '${original}' in '${sourcePath}'`);
-    } catch (cause) {
-      throw new Error(`Asset '${original}' escapes the repository root.`, {
-        cause,
-      });
-    }
+    await assertWithinOrThrow(
+      () => assertWithin(root, input, `Asset '${original}' in '${sourcePath}'`),
+      `Asset '${original}' escapes the repository root.`,
+    );
     const safeRelative = relative(root, input).replaceAll("\\", "/");
     const outputRelative = `assets/source/${safeRelative}`;
     const target = join(outDir, outputRelative);
