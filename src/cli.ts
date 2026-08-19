@@ -11,7 +11,7 @@ import {
   isDataBacked,
   loadAdapterExport,
 } from "./adapter.js";
-import type { LandingPageDataConfig } from "./index.js";
+import type { LandingPageConfig, LandingPageDataConfig } from "./index.js";
 import { generateChangelog } from "./changelog.js";
 import {
   buildGeneric,
@@ -201,38 +201,57 @@ async function buildJsonData(
 }
 
 /**
- * Builds a site whose routes are composed from validated build-time data. Each
- * declared source resolves through its own validator, so a payload that does not
- * match the consumer's type ends the build here rather than reaching composition.
- * The root-model fallback does not apply: there is no root model to replace.
+ * Resolves a data-backed adapter's declared sources and hands the composed
+ * configuration to `use`, which runs while the prefetch directory still exists.
+ * Each declared source resolves through its own validator, so a payload that does
+ * not match the consumer's type ends the build here rather than reaching
+ * composition. The root-model fallback does not apply: there is no root model to
+ * replace.
+ *
+ * Each diagnostic carries the declaration index it came from and the list is
+ * sorted by it before being reported (design/20-contract.md, "Routes composed
+ * from build-time data"). Collecting failures rather than failing fast exists so
+ * one correction cycle addresses every malformed input; emitting them grouped by
+ * failure class instead would order the list by something the consumer never
+ * wrote, and a missing id would always precede a validator failure declared
+ * above it.
  */
-async function buildAdapterData(
-  outDir: string,
+async function withDataBackedConfig<R>(
   sourceMapPath: string,
-  adapterPath: string,
   declaration: LandingPageDataConfig<unknown>,
-): Promise<void> {
+  use: (config: LandingPageConfig, runtimeMap: SourceMap) => Promise<R>,
+): Promise<R> {
   const map = await readSourceMap(sourceMapPath);
   validatePublicSources(map);
   const temporary = await mkdtemp(join(tmpdir(), "szd-landing-data-"));
   try {
-    const entries = Object.entries(declaration.sources) as [
-      string,
-      { id: string; validate: (raw: unknown) => unknown },
-    ][];
-    const failures: string[] = [];
-    const declaredEntries = entries.filter(([key, source]) => {
+    const entries = Object.entries(declaration.sources).map(
+      ([key, source], index) => ({
+        key,
+        index,
+        source: source as { id: string; validate: (raw: unknown) => unknown },
+      }),
+    );
+    const failures: { index: number; message: string }[] = [];
+    const report = (): string =>
+      failures
+        .sort((left, right) => left.index - right.index)
+        .map((failure) => failure.message)
+        .join("\n");
+    const declared = entries.filter(({ key, index, source }) => {
       const mapSource = map.sources[source.id];
       if (!mapSource) {
-        failures.push(
-          `Adapter source '${key}' names JSON source '${source.id}', which is not declared in '${sourceMapPath}'.`,
-        );
+        failures.push({
+          index,
+          message: `Adapter source '${key}' names JSON source '${source.id}', which is not declared in '${sourceMapPath}'.`,
+        });
         return false;
       }
       if (mapSource.at !== "build") {
-        failures.push(
-          `Adapter source '${key}' ('${source.id}') must declare at: build.`,
-        );
+        failures.push({
+          index,
+          message: `Adapter source '${key}' ('${source.id}') must declare at: build.`,
+        });
         return false;
       }
       return true;
@@ -243,42 +262,74 @@ async function buildAdapterData(
       prefetched = await prefetch(map, temporary, nodePorts());
     } catch (error) {
       if (error instanceof JsonError && error.code === "build.failed") {
-        for (const [key, source] of declaredEntries) {
+        for (const { key, index, source } of declared) {
           const failure = error.failures.find((item) => item.id === source.id);
           if (failure)
-            failures.push(
-              `Adapter source '${key}' ('${source.id}') failed: ${failure.message}`,
-            );
+            failures.push({
+              index,
+              message: `Adapter source '${key}' ('${source.id}') failed: ${failure.message}`,
+            });
         }
       }
-      if (failures.length > 0) throw new Error(failures.join("\n"));
+      if (failures.length > 0) throw new Error(report());
       throw error;
     }
 
     const loader = createJsonLoader(prefetched.runtimeMap, nodePorts());
     const data: Record<string, unknown> = {};
-    for (const [key, source] of declaredEntries) {
+    for (const { key, index, source } of declared) {
       const result = await loader.load({
         id: source.id,
         validate: source.validate as never,
       });
       if (!result.ok)
-        failures.push(
-          `Adapter source '${key}' ('${source.id}') failed: ${result.message}`,
-        );
+        failures.push({
+          index,
+          message: `Adapter source '${key}' ('${source.id}') failed: ${result.message}`,
+        });
       else data[key] = result.data;
     }
-    if (failures.length > 0) throw new Error(failures.join("\n"));
-    const config = declaration.config(data);
-    await buildAdapterConfig(
-      root,
-      dirname(adapterPath),
-      config,
-      outDir,
-      prefetched.runtimeMap,
-    );
+    if (failures.length > 0) throw new Error(report());
+    return await use(declaration.config(data), prefetched.runtimeMap);
   } finally {
     await rm(temporary, { recursive: true, force: true });
+  }
+}
+
+/** Builds a site whose routes are composed from validated build-time data. */
+async function buildAdapterData(
+  outDir: string,
+  sourceMapPath: string,
+  adapterPath: string,
+  declaration: LandingPageDataConfig<unknown>,
+): Promise<void> {
+  await withDataBackedConfig(sourceMapPath, declaration, (config, runtimeMap) =>
+    buildAdapterConfig(root, dirname(adapterPath), config, outDir, runtimeMap),
+  );
+}
+
+/**
+ * Resolves a data-backed adapter's configuration for the dev server to hold. The
+ * prefetch directory is gone by the time this returns, so the caller receives the
+ * composed configuration and not the runtime map — which is why the dev server
+ * emits no `#szd-json-sources` (design/20-contract.md, "JSON-backed site data").
+ */
+async function resolveDataBackedConfig(
+  sourceMapPath: string,
+  declaration: LandingPageDataConfig<unknown>,
+): Promise<LandingPageConfig> {
+  return withDataBackedConfig(sourceMapPath, declaration, (config) =>
+    Promise.resolve(config),
+  );
+}
+
+/** Whether a source map is present, which is what selects the JSON input path. */
+async function hasSourceMap(path: string): Promise<boolean> {
+  try {
+    await readFile(path, "utf8");
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -312,16 +363,7 @@ async function build(
   );
   const adapter = flags.adapter ?? "site/landing.config.ts";
   const adapterExists = await hasAdapter(root, adapter);
-  if (
-    await (async () => {
-      try {
-        await readFile(sourceMapPath, "utf8");
-        return true;
-      } catch {
-        return false;
-      }
-    })()
-  ) {
+  if (await hasSourceMap(sourceMapPath)) {
     // An adapter declaring build-time sources is that data's consumer, so it
     // outranks the root model. An adapter that declares none falls through, and
     // a consumer holding both files therefore builds exactly as it did before.
@@ -405,6 +447,29 @@ async function main(): Promise<void> {
   if (command === "dev") {
     const adapter = parsed.adapter ?? "site/landing.config.ts";
     if (await hasAdapter(root, adapter)) {
+      const adapterPath = resolve(root, adapter);
+      const declaration = await loadAdapterExport(adapterPath);
+      if (isDataBacked(declaration)) {
+        const sourceMapPath = resolve(
+          root,
+          parsed["source-map"] ?? "site/sources.public.yml",
+        );
+        if (!(await hasSourceMap(sourceMapPath)))
+          throw new Error(
+            `Adapter '${adapterPath}' declares build-time data sources, which need a JSON source map.`,
+          );
+        // Resolved once, here, rather than by the route middleware per request:
+        // re-resolving would refetch every declared source on every navigation.
+        // The middleware holds this configuration and reloads nothing, so an
+        // edit to a data-backed adapter needs a restart — the same trade generic
+        // `dev` already makes, and the reason it is stated rather than silent.
+        await devAdapter(
+          root,
+          adapter,
+          await resolveDataBackedConfig(sourceMapPath, declaration),
+        );
+        return;
+      }
       await devAdapter(root, adapter);
       return;
     }

@@ -451,6 +451,50 @@ describe("custom adapter", () => {
     }
   });
 
+  it("links and serves every declared site-wide stylesheet over the dev server, not only in built output", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
+    roots.push(root);
+    const site = join(root, "site");
+    await mkdir(join(site, "src"), { recursive: true });
+    // Declared at the repository root rather than under the site root, so a dev
+    // server reaching it through Vite's own file serving would need
+    // `server.fs.allow` widened. The package answers the href itself instead.
+    await mkdir(join(root, "branding"), { recursive: true });
+    await writeFile(
+      join(root, "branding", "base.css"),
+      "body{color:rebeccapurple}",
+      "utf8",
+    );
+    await writeFile(
+      join(site, "landing.config.ts"),
+      `export default { styles: ["branding/base.css"], routes: [{ path: "/", entry: "src/main.ts", metadata: { title: "Home", description: "Home page" } }] };`,
+      "utf8",
+    );
+    await writeFile(join(site, "src", "main.ts"), "export {};", "utf8");
+    const server = await devAdapter(root, "site/landing.config.ts");
+    try {
+      const base = server.resolvedUrls?.local[0];
+      if (!base) throw new Error("dev server did not resolve a local URL");
+
+      const home = await (await fetch(base)).text();
+      expect(home).toContain(
+        '<link rel="stylesheet" href="/assets/styles/branding/base.css">',
+      );
+
+      const css = await fetch(`${base}assets/styles/branding/base.css`);
+      expect(css.status).toBe(200);
+      expect(css.headers.get("content-type")).toContain("text/css");
+      expect(await css.text()).toBe("body{color:rebeccapurple}");
+
+      // The resolved sandbox is untouched by serving that file.
+      expect(server.config.server.fs.allow).not.toContain(
+        join(root, "branding"),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
   it("emits no stylesheet link and no default when styles is absent or empty (UI7.5)", async () => {
     const root = await mkdtemp(join(tmpdir(), "szd-adapter-"));
     roots.push(root);

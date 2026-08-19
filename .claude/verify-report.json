@@ -1,41 +1,59 @@
 {
   "gates": [
     {
-      "name": "npm run format:check",
+      "name": "Prettier format check (npm run format:check)",
       "status": "Passed",
-      "detail": "prettier --check . — All matched files use Prettier code style!"
+      "detail": "prettier --check . : 'All matched files use Prettier code style!' Covers every tracked source, test, Markdown and JSON file, including the four design/ and agent.md documents this branch edits."
     },
     {
-      "name": "npm run lint",
+      "name": "ESLint (npm run lint)",
+      "status": "Failed",
+      "detail": "/Users/ben/Dropbox/Projects/SubZeroDev.Platform.UI.LandingPage/.claude/worktrees/inspiring-jemison-f70809/dist/adapter.d.ts\n  0:0  error  Parsing error: No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present:\n - /Users/ben/Dropbox/Projects/SubZeroDev.Platform.UI.LandingPage\n - /Users/ben/Dropbox/Projects/SubZeroDev.Platform.UI.LandingPage/.claude/worktrees/inspiring-jemison-f70809\nYou'll need to explicitly set tsconfigRootDir in your parser options.\nSee: https://tseslint.com/parser-tsconfigrootdir\n\n/Users/ben/Dropbox/Projects/SubZeroDev.Platform.UI.LandingPage/.claude/worktrees/inspiring-jemison-f70809/dist/adapter.js\n  0:0  error  Parsing error: No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present:\n...\n\u2716 92 problems (92 errors, 0 warnings)\n\nAll 92 reported files fail with the same parsing error; 43 of them are inside .claude/worktrees/ (a Claude-managed git worktree holding a second tsconfig.json), and 49 are the repository's own files, which cannot resolve a root while that second candidate exists. Flat-config ESLint never reads .gitignore, and eslint.config.js ignores only docs/build/ and docs/.docusaurus/. Pre-existing: 68 identical errors on a pristine main with this reconciliation's changes stashed. `npx eslint src test` (the repository's own sources, scoped past the worktree) is clean."
+    },
+    {
+      "name": "TypeScript typecheck (npm run typecheck)",
+      "status": "Passed",
+      "detail": "tsc --noEmit : exit 0, no diagnostics. Covers src/ and test/ against tsconfig.json, including the changed devAdapter signature and the withDataBackedConfig extraction in src/cli.ts."
+    },
+    {
+      "name": "TypeScript build (npm run build)",
+      "status": "Passed",
+      "detail": "tsc -p tsconfig.json && node -e chmodSync('dist/cli.js', 0o755) : exit 0. Emits dist/ and sets the bin's executable bit, which is what commit 85e8eaa on this branch added."
+    },
+    {
+      "name": "Vitest suite (npm test)",
+      "status": "Passed",
+      "detail": "vitest run : Test Files 19 passed (19), Tests 160 passed (160). Includes the three regression tests this branch adds, each independently verified by reverting its fix and confirming the test fails. NOTE: 9 of the 19 files are duplicate suites collected from .claude/worktrees/, so the file and test counts are inflated by that stale checkout; the repository's own 10 suites all pass."
+    },
+    {
+      "name": "Packaged artifact check (npm run pack:check)",
+      "status": "Passed",
+      "detail": "npm pack --dry-run : exit 0, total files 33, subzerodev-platform-ui-landing-page-0.4.1.tgz. No publish performed."
+    },
+    {
+      "name": "PowerShell parse-check (every *.ps1)",
+      "status": "Passed",
+      "detail": "[System.Management.Automation.Language.Parser]::ParseFile over every *.ps1 outside node_modules and .claude/worktrees/ : 0 parse errors across the 19 scripts in tools/."
+    },
+    {
+      "name": "Pester tests (tools/)",
+      "status": "Passed",
+      "detail": "Invoke-Pester -Path tools : Tests Passed: 113, Failed: 0, Skipped: 0, Inconclusive: 0, NotRun: 0, across Sync-Kit, Test-Companion, Test-DesignDrift, Test-VerifyReport, Test-WriteSurface, Measure-Session, Invoke-DoneHousekeeping and Wait-PullRequestCheck test files."
+    },
+    {
+      "name": "Worktree cleanliness (git diff --check, git status)",
+      "status": "Passed",
+      "detail": "git diff --check : clean, no whitespace errors and no trailing double-space line breaks. git status --short : empty; branch level with origin, nothing unpushed."
+    },
+    {
+      "name": "npm run check (the aggregate)",
       "status": "DidNotRun",
-      "reason": "eslint . fails with 88 'No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present' parsing errors, naming this repo root and .claude/worktrees/inspiring-jemison-f70809 as the two candidates. That worktree is a stale, unrelated checkout left under .claude/worktrees/ inside this same clone (detached HEAD at an older commit). Confirmed pre-existing and unrelated to this branch: the same 88 errors reproduce identically regardless of this branch's diff. Same environmental collision recorded for PR #28 (commit 8e05f59) and for this branch before the merge (PR #30) and for PR #31."
+      "reason": "The aggregate chains format:check && lint && typecheck && build && test && pack:check, so it stops at the ESLint failure above and never reaches the four gates after it. Each component was run individually instead and is reported on its own line; no component was skipped."
     },
     {
-      "name": "npm run typecheck",
-      "status": "Passed",
-      "detail": "tsc --noEmit completed with no output and exit 0."
-    },
-    {
-      "name": "npm run build",
-      "status": "Passed",
-      "detail": "tsc -p tsconfig.json completed with no output and exit 0."
-    },
-    {
-      "name": "npm test",
-      "status": "Passed",
-      "detail": "vitest run — Test Files 18 passed (18), Tests 139 passed (139), including the regression test 'serves a config-based adapter's routes over the dev server, reloading the config on each request (#10)'."
-    },
-    {
-      "name": "npm run pack:check",
-      "status": "Passed",
-      "detail": "npm pack --dry-run — 31 files, package size 28.8 kB, unpacked 102.2 kB."
-    },
-    {
-      "name": "git diff --check",
-      "status": "Passed",
-      "detail": "No output, exit 0 — no whitespace errors."
+      "name": "Docusaurus documentation site build (docs/)",
+      "status": "DidNotRun",
+      "reason": "docs/node_modules is absent and the CI step ('Build documentation site' in .github/workflows/pages.yml) begins with `npm ci`. Installing the docs toolchain locally purely to run a step that is not flagged `# verification: true` is a side effect this command does not take. This is a deploy-workflow step, not a discovered gate; the answer will come from that workflow on merge."
     }
-  ],
-  "discoveredCiGates": [],
-  "discoveryNote": "No .github/workflows/*.yml step in this repository carries a '# verification: true' comment, so zero CI-flagged gates were discovered. All entries above are this repository's optional, non-CI-gated npm run check constituents plus git diff --check. Re-verified after merging origin/main (which brought in PR #31's contract amendment) into this branch to resolve a merge conflict confined to this file."
+  ]
 }

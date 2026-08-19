@@ -74,6 +74,14 @@ parsing it and constructing any Data.Json loader. The `szd-json-sources` id is
 part of the public DOM contract. Generic and body routes emit no runtime source
 map and initiate no data request.
 
+This is a property of built output. The map emitted is the prefetched one, whose
+build-time entries carry their resolved payload rather than the path or URL the
+public map declared, so nothing that has not built has a faithful map to emit.
+The dev server therefore emits no `szd-json-sources` at all, rather than one that
+would send a consumer's loader down a path production never takes. A consumer
+entry that reads the element must tolerate its absence, which is the same
+tolerance a body or generic route already requires.
+
 ## Routes composed from build-time data
 
 `defineLandingPageData(sources, config)` declares a site whose routes are
@@ -144,14 +152,22 @@ site that builds and serves unstyled is the silent failure the declared-source
 rules exist to prevent. An absent or empty `styles` emits no link and no
 default.
 
+The rule holds on the dev server as well as in built output — a dev page missing
+every site-wide rule is the same unstyled site the paragraph above refuses, seen
+a step earlier. The package answers each emitted href itself, from the bytes it
+already read and contained, so a stylesheet declared outside the site root
+reaches the browser without `server.fs.allow` being widened to include it.
+
 ## Serving built output
 
 `preview` serves a built `outDir` over `node:http` for generic and
-custom-adapter sites alike. It honours `--out-dir` and `--port` and no other
-flag: `--adapter` and `--source-map` are read past, not forwarded. Mode is
-resolved once, inside the `build` it runs (below), and never a second time
-here — the command holds no precedence ladder of its own, so it cannot
-disagree with `build` about which mode a site is in.
+custom-adapter sites alike. `--out-dir` and `--port` govern the serving, and the
+build it runs reads the input flags that build already reads — so `preview` and
+`build` given the same flags describe the same site. The two flags that select
+which _mode_ a site is in are the exception: `--adapter` and `--source-map` are
+read past, not forwarded. Mode is resolved once, inside the `build` it runs
+(below), and never a second time here — the command holds no precedence ladder of
+its own, so it cannot disagree with `build` about which mode a site is in.
 
 One static server implementation serves both `preview` and generic `dev`. A
 second copy is what would let the two diverge on resolution, containment or
@@ -202,6 +218,19 @@ The dev server's `server.fs.allow` is exactly the site root plus the resolved
 `allow` entries. Plugin-supplied configuration that would extend it does not take
 effect; the run ends naming the entries it refused. A consumer widens that
 sandbox through `allow`, which is declared and reviewable, or not at all.
+
+`server.fs.strict` stays on, for the same reason and with the same refusal: it is
+what gives the allow list any force, so disabling it and widening it are one
+attempt wearing two faces. Both are refused at two points — over the merged
+configuration, and again against the resolved server — because the resolved
+configuration is never frozen, so a plugin can reach the running server after
+resolution has finished rather than declaring anything a config hook would see.
+
+`build.outDir` stays exactly the directory the adapter was called with. A plugin
+redirecting it ends the build naming the directory it asked for: the step that
+lifts the generated entry documents into place trusts `outDir` unconditionally,
+so a redirected build either finds nothing there to lift or operates on whatever
+else happens to be.
 
 Package-owned plugins keep their position. The adapter's route middleware still
 registers ahead of Vite's built-in middlewares, and no consumer plugin displaces
