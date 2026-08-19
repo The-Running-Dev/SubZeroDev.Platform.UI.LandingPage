@@ -21,12 +21,9 @@ name: Deploy self-hosted landing page and docs
 # (https://the-running-dev.github.io/SubZeroDev.Platform.UI.LandingPage/)
 # rather than a domain root, and every one of those paths resolved above the
 # deployed site — the same reason GameEngine uses a custom domain. Fixed via
-# a `--base-path` flag (issue #48); not yet wired in below because this step
-# installs the published package (`PACKAGE_VERSION`), which does not carry
-# the fix until a release ships. Add `--base-path
-# /SubZeroDev.Platform.UI.LandingPage/` to the "Build landing page" step
-# below once `PACKAGE_VERSION` is bumped to a release that includes it. See
-# design/90-decisions.md.
+# a `--base-path` flag (issue #48, released as 0.5.0) and wired in below via
+# the "Build landing page" step's `--base-path`. See design/90-decisions.md
+# and issue #50.
 
 on:
   push:
@@ -44,7 +41,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PACKAGE_VERSION: "0.4.1"
+  PACKAGE_VERSION: "0.5.0"
 
 jobs:
   deploy:
@@ -92,7 +89,9 @@ jobs:
         # --docs-url carries the Pages project subpath, matching `baseUrl` in
         # docs/docusaurus.config.ts — unlike the shell's own hardcoded paths
         # noted above, this one is the caller's to get right.
-        run: subzerodev-platform-ui-landing-page build --docs-url /SubZeroDev.Platform.UI.LandingPage/docs/ --repository-url https://github.com/${{ github.repository }}
+        # --base-path is the shell's own project-subpath prefix for its
+        # stylesheet links and Home/Changelog nav (issue #48, issue #50).
+        run: subzerodev-platform-ui-landing-page build --docs-url /SubZeroDev.Platform.UI.LandingPage/docs/ --repository-url https://github.com/${{ github.repository }} --base-path /SubZeroDev.Platform.UI.LandingPage/
 
       - name: Merge landing page into documentation build
         run: subzerodev-platform-ui-landing-page merge --docs-output docs/build
