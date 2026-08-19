@@ -213,7 +213,11 @@ is trustworthy.
 It prefixes the generic shell's own self-links and stylesheet hrefs so a site
 deployed under a project subpath addresses its own documents; it does not reach
 the custom-adapter forms, whose entry paths are `/`-relative to the site root
-Vite is given.
+Vite is given. It is a deployment flag rather than a content one, which is why
+it is a flag and not a field on the JSON model: the same model deployed at a
+domain root and under a project subpath needs two different prefixes and is one
+document. _Decided, not yet in the tree_ (`90-decisions.md`, 2026-08-19): today
+the flag reaches only the legacy generic form (**C29**).
 
 **`dev` selects the site through the same ladder, then branches on family.** The
 ladder decides _which_ site; the site's family decides which server — an
@@ -268,18 +272,18 @@ dependency graph and each module's ownership are
 [`10-design.md`](10-design.md) § _Module boundaries_; what is here is only the
 constraint each surface carries beyond its signature.
 
-| Module                                          | Surface                                                                                                       | The constraint that is not in the signature                                                                                                                                                                                  |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`src/route.ts`](../src/route.ts)               | `assertRoutePath`, `assertRoute`, `assertUniquePaths`, `isBodyRoute`                                          | Every caller that can reach the write path must call these; the write path calls them again regardless (**C1**–**C4**)                                                                                                       |
-| [`src/adapter.ts`](../src/adapter.ts)           | `html`, `buildAdapterConfig`, `buildAdapter`, `devAdapter`, `hasAdapter`, `loadAdapterExport`, `isDataBacked` | `html` is exported for direct testing, not for consumers. `buildAdapterConfig` is the single document writer every custom-adapter route form and input mode reaches (**C27**)                                                |
-| [`src/generic.ts`](../src/generic.ts)           | `buildGeneric`, `buildGenericData`, `GenericOptions`                                                          | Two entry points, one `documentHtml` — the legacy and JSON generic forms may not drift on markup (**C27**)                                                                                                                   |
-| [`src/staticServer.ts`](../src/staticServer.ts) | `createStaticServer`                                                                                          | One implementation serves `preview` and generic `dev`; a second copy is what would let them diverge on resolution, containment or content type                                                                               |
-| [`src/data.ts`](../src/data.ts)                 | `validateLandingPageData`, and the model types `src/index.ts` re-exports                                      | Rejects unknown fields; every rejection branch carries a negative test                                                                                                                                                       |
-| [`src/paths.ts`](../src/paths.ts)               | `resolveFrom`, `isWithin`, `assertWithin`                                                                     | **Crosses no boundary today: no module and no test imports it.** It is the designated owner of containment and is not yet wired up (**C33**). `isWithin` does not resolve symlinks and is not a containment check on its own |
-| [`src/merge.ts`](../src/merge.ts)               | `mergeLanding`                                                                                                | Fingerprints before and after rather than trusting the copy (**C25**)                                                                                                                                                        |
-| [`src/git.ts`](../src/git.ts)                   | `git`, `inferRepository`, `repositoryFromRemote`                                                              | `git` collapses every failure into one message naming the remedy; callers that can proceed without history catch it                                                                                                          |
-| [`src/changelog.ts`](../src/changelog.ts)       | `generateChangelog`                                                                                           | Escapes `\`, `[` and `]` in subjects so a commit message cannot forge a Markdown link                                                                                                                                        |
-| [`src/baseCss.ts`](../src/baseCss.ts)           | `baseCss`                                                                                                     | The `szd-` prefixes here are the semver-governed surface (**C31**)                                                                                                                                                           |
+| Module                                          | Surface                                                                                                       | The constraint that is not in the signature                                                                                                                                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`src/route.ts`](../src/route.ts)               | `assertRoutePath`, `assertRoute`, `assertUniquePaths`, `isBodyRoute`                                          | Every caller that can reach the write path must call these; the write path calls them again regardless (**C1**–**C4**)                                                                                                          |
+| [`src/adapter.ts`](../src/adapter.ts)           | `html`, `buildAdapterConfig`, `buildAdapter`, `devAdapter`, `hasAdapter`, `loadAdapterExport`, `isDataBacked` | `html` is exported for direct testing, not for consumers. `buildAdapterConfig` is the single document writer every custom-adapter route form and input mode reaches (**C27**)                                                   |
+| [`src/generic.ts`](../src/generic.ts)           | `buildGeneric`, `buildGenericData`, `GenericOptions`                                                          | Two entry points, one `documentHtml` — the legacy and JSON generic forms may not drift on markup (**C27**). Each entry point still composes the `GenericOptions` it feeds in, which is where they do currently differ (**C29**) |
+| [`src/staticServer.ts`](../src/staticServer.ts) | `createStaticServer`                                                                                          | One implementation serves `preview` and generic `dev`; a second copy is what would let them diverge on resolution, containment or content type                                                                                  |
+| [`src/data.ts`](../src/data.ts)                 | `validateLandingPageData`, and the model types `src/index.ts` re-exports                                      | Rejects unknown fields; every rejection branch carries a negative test                                                                                                                                                          |
+| [`src/paths.ts`](../src/paths.ts)               | `resolveFrom`, `isWithin`, `assertWithin`                                                                     | **Crosses no boundary today: no module and no test imports it.** It is the designated owner of containment and is not yet wired up (**C33**). `isWithin` does not resolve symlinks and is not a containment check on its own    |
+| [`src/merge.ts`](../src/merge.ts)               | `mergeLanding`                                                                                                | Fingerprints before and after rather than trusting the copy (**C25**)                                                                                                                                                           |
+| [`src/git.ts`](../src/git.ts)                   | `git`, `inferRepository`, `repositoryFromRemote`                                                              | `git` collapses every failure into one message naming the remedy; callers that can proceed without history catch it                                                                                                             |
+| [`src/changelog.ts`](../src/changelog.ts)       | `generateChangelog`                                                                                           | Escapes `\`, `[` and `]` in subjects so a commit message cannot forge a Markdown link                                                                                                                                           |
+| [`src/baseCss.ts`](../src/baseCss.ts)           | `baseCss`                                                                                                     | The `szd-` prefixes here are the semver-governed surface (**C31**)                                                                                                                                                              |
 
 ## Error semantics
 
@@ -343,9 +347,13 @@ document. Only the code-enforced ones may be trusted without checking.
   entry route it is rejected, never dropped — a dropped field is a consumer
   believing a page changed when it did not.
 - **C7** Every value the package interpolates into a document it owns is
-  HTML-escaped. The two exceptions are named and validated elsewhere: a body
-  route's `body` and its `stylesheet` (**C4**). _`src/adapter.ts` `html`,
-  `src/generic.ts` `documentHtml`; code._
+  HTML-escaped, and each exception is named and made safe elsewhere rather than
+  left to a reader to notice. At the adapter writer the exceptions are a body
+  route's `body` and its `stylesheet`, validated by **C4**, and the source-map
+  payload, escaped for the carrier that holds it by **C9**. At the generic
+  writer the single exception is rendered Markdown, sanitized by **C8**. There
+  is no fourth. _`src/adapter.ts` `html`, `src/generic.ts` `documentHtml`;
+  code._
 - **C8** Generic Markdown is sanitized, not escaped. _`src/generic.ts` `render`
   via `rehype-sanitize`; code._ Escaping it would defeat the one thing it is
   for.
@@ -511,8 +519,17 @@ document. Only the code-enforced ones may be trusted without checking.
   JavaScript type does not execute, so the built site would fail in the one
   command written to inspect it.
 - **C29** Generic self-links and stylesheet hrefs are prefixed with the
-  normalised `--base-path`, which defaults to `/`. _`src/generic.ts`
-  `normalizeBasePath`, `documentHtml`; code._
+  normalised `--base-path`, which defaults to `/` — on both generic forms.
+  _`src/generic.ts` `normalizeBasePath`, `documentHtml`; code for the legacy
+  README/CHANGELOG form. **Decided, not yet in the tree** for the JSON generic
+  form (`90-decisions.md`, 2026-08-19)._ Today `buildGenericData` composes the
+  options it writes from the model alone and sets no base path, and `src/cli.ts`
+  hands it no flags, so a JSON-generic site emits root-absolute links whatever
+  the flag says. Breaking under a project subpath is a property of the
+  deployment and not of the input form that produced the site, so the two forms
+  cannot correctly differ here. **C27**'s convergence does not cover this:
+  sharing `documentHtml` fixes the markup, and leaves each entry point free to
+  compute a different value to feed it.
 - **C32** `preview` builds before serving, and serves the `outDir` that build
   produced. There is no `--no-build` escape and no absent-`outDir` error.
   _`src/cli.ts`; structurally._ The accepted cost is that a build failing after

@@ -1,5 +1,38 @@
 # Decisions
 
+### 2026-08-19 — `--base-path` is a deployment flag both generic forms honour
+
+Context: `/contract` verified **C29** against the tree and found the invariant
+holds for one generic form only. `--base-path` was added by the fix for #49 so a
+generic site deployed under a GitHub Pages project subpath addresses its own
+documents; `src/generic.ts` `buildGenericData` composes the options it writes
+from the JSON model alone and sets no base path, and `src/cli.ts` hands it no
+flags, so a JSON-generic site emits root-absolute links whatever the flag says.
+Nothing recorded the omission as deliberate — the flag appears in no prior entry,
+no slice, and not in `README.md`. This entry also supplies the record `C29`
+itself never had: the invariant entered `20-contract.md` describing shipped
+behaviour rather than a decision, so no alternatives were on file for it.
+Chosen: the code is the wrong side, and **C29** keeps its unqualified scope with
+a _decided, not yet in the tree_ marker naming `buildGenericData` as the gap —
+the same treatment **C10**, **C12**, **C28** and **C33** already carry. Breaking
+under a project subpath is a property of the deployment and not of the input form
+that produced the site, so the two generic forms cannot correctly differ here.
+The base path stays a CLI flag and does not become a field on the JSON model:
+one model deployed at a domain root and under a project subpath needs two
+prefixes and is one document, so a model-level field would have to be rewritten
+per deployment target by whoever publishes it.
+Rejected: **narrowing C29 to the legacy README/CHANGELOG form** and recording
+that a JSON-generic site cannot deploy under a project subpath — cheaper, and it
+makes the document true today, but it accepts the silent failure this design
+otherwise refuses: such a site builds green, `check` passes, and it serves with
+broken navigation and no stylesheet only once deployed. **Reading the gap as
+covered by C27** — both forms do converge on one `documentHtml`, so it was
+tempting to treat the markup convergence as covering the hrefs too; rejected
+because the convergence is on the writer and the drift is in what each caller
+computes to feed it, which is the distinction the amended C29 now states.
+Reversibility: cheap. Reversing means deleting one marker from **C29** and
+recording the limitation instead; no code has been written against it yet.
+
 ### 2026-08-19 — `dev` resolves input mode through the ladder `build` owns, then branches by family
 
 Context: `/design` found `dev` and `build` disagreeing about which mode a site
@@ -760,4 +793,8 @@ Staging only. Once an item becomes a GitHub issue, `/track` removes it from here
   adapter where `build` serves the root JSON model (2026-08-19 decision above).
 - Filesystem containment is implemented three inconsistent ways and `src/paths.ts`
   is imported by nothing (2026-08-19 decision above). The contract's cross-module
-  surface row for it is currently false and is `/contract`'s to correct.
+  surface row for it now states this rather than claiming the module is wired up.
+- `--base-path` does not reach `src/generic.ts` `buildGenericData`, so a
+  JSON-generic site emits root-absolute self-links and stylesheet hrefs and
+  breaks under a GitHub Pages project subpath (2026-08-19 decision above). Needs
+  a bug issue filed from `.github/ISSUE_TEMPLATE/`, then `/fix`.
