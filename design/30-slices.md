@@ -304,3 +304,123 @@ Out of scope: resolving input mode in `preview`, and any `--no-build` or
 absent-`outDir` path — the 2026-08-19 decisions rejected both. A second server
 implementation for adapter mode. Changing the adapter dev server, whose own
 route middleware is unaffected; only generic `dev`'s static serving moves.
+
+### UI10 — The site you develop against is the site that ships
+
+Delivers: for a consumer who keeps a published site model and a local adapter
+file side by side, a development server that shows the site the deploy will
+actually publish. Today the two commands disagree without saying so — the deploy
+uses the published model and the development server ignores it entirely, so
+every page checked locally belongs to a site nobody is going to see. Pages that
+ask for their own data also get it locally now, and a data source that cannot be
+reached stops the server starting instead of letting someone develop against a
+page with its content missing.
+
+Touches: `src/cli.ts`, `src/adapter.ts`, `README.md`, `test/json-source.test.ts`,
+`test/adapter.test.ts`
+
+Depends on: none
+
+Ordered first of the two because it carries the least certain bet in the
+rewritten design: that a site selected by the source map can still be served by
+the Vite dev server, rather than being sent to build-and-serve like every other
+map-selected site. The 2026-08-19 decision rejected the uniform fix by name for
+exactly that reason, so the slice that proves the branch is the one to run first.
+
+Acceptance:
+
+- UI10.1 In a repository holding both a public source map whose root model
+  declares `kind: "adapter"` and an adapter module declaring no build-time
+  sources, `dev` serves the routes the model declares, not the routes the adapter
+  module declares — the same site `build` writes from the same two files.
+- UI10.2 That site is served by the Vite dev server and not by the static server:
+  a request for an entry module the model names returns JavaScript Vite
+  transformed, not the module's source bytes.
+- UI10.3 In the same repository, a root model declaring `kind: "generic"` is
+  built and served statically, and a request for a declared route path without a
+  trailing slash resolves — the family decides the server, not the ladder rung.
+- UI10.4 An adapter module declaring build-time sources still outranks the root
+  model under `dev`, as it already does under `build`.
+- UI10.5 A repository with an adapter module and no source map is unchanged: the
+  Vite dev server starts and the adapter module is re-read per request, so an
+  edit to it takes effect without a restart.
+- UI10.6 A repository with neither an adapter module nor a source map is
+  unchanged: the generic site is built and served statically.
+- UI10.7 Under `dev` on a data-backed adapter, an entry route declaring
+  `dataSourceIds` emits `<script type="application/json" id="szd-json-sources">`
+  carrying the prefetched map — each build-time entry holding its resolved
+  payload inline, not the path or URL the public map declared — byte-identical to
+  what `build` emits for the same route. A body route and a generic route emit
+  none.
+- UI10.8 A declared source that cannot be fetched, or whose payload fails its
+  validator, ends `dev` before the server listens: the message names the source
+  and its reason, and nothing binds the port.
+- UI10.9 `--source-map` naming a file that does not exist ends `dev` with the
+  same message `build` raises for the same flag; an absent _default_ map is not
+  an error and resolution continues down the ladder.
+- UI10.10 `dev` selects mode by calling the same function `build` does:
+  `hasAdapter` and `hasSourceMap` are each reached from exactly one call site in
+  `src/cli.ts`, and `dev` holds no source-map or adapter test of its own.
+
+Out of scope: hot-reloading a data-backed adapter's configuration — re-resolving
+per request was rejected on 2026-08-19 because it refetches every declared source
+on every navigation, and the restart is the retained cost. Sending a map-selected
+adapter-family site to build-and-serve, which is the uniform fix the same day's
+decision rejected by name. `--base-path` on generic `dev`, which is a separate
+filed defect. Any new exported name: `devAdapter` may gain what it needs to hold a
+resolved configuration and a prefetched map, and no new module surface appears.
+
+### UI11 — One containment check, and it follows symbolic links
+
+Delivers: for anyone whose stylesheets, images or served files are reached
+through a symbolic link, a build that refuses to read outside the repository the
+same way on every path. Today three separate checks disagree about what
+"outside" even means, and none of them follows a link — so a link pointing out of
+the tree is read and copied into the published site on two of the three paths,
+and refused on the third.
+
+Touches: `src/paths.ts`, `src/generic.ts`, `src/adapter.ts`,
+`src/staticServer.ts`, `README.md`, `test/generic.test.ts`,
+`test/adapter.test.ts`, `test/preview.test.ts`
+
+Depends on: none. Ordered after UI10 only because UI10 carries the riskier bet;
+the two touch different functions of `src/adapter.ts` and no other file in
+common.
+
+Acceptance:
+
+- UI11.1 A site-wide stylesheet path that resolves, through a symbolic link, to a
+  file outside the repository root ends the build naming that declared path, and
+  no output directory is written. It builds today.
+- UI11.2 A site-wide stylesheet path naming a file that does not exist still ends
+  the build with the unreadable-stylesheet message, naming the declared path —
+  containment is checked in an order that does not turn a missing file into a
+  resolution failure with a different message.
+- UI11.3 A local Markdown asset that resolves, through a symbolic link, to a file
+  outside the repository root ends the generic build naming that asset. It is
+  copied under `assets/source/` today.
+- UI11.4 A request for a file inside the served tree that is a symbolic link to a
+  file outside it answers 404, and the response body carries no filesystem path.
+  It is served today.
+- UI11.5 A request naming a path that does not exist still answers 404 — it does
+  not throw, does not answer 500, and does not end the server.
+- UI11.6 A stylesheet, a Markdown asset, and a served file each reached through a
+  symbolic link that stays inside the root are all still accepted.
+- UI11.7 `src/generic.ts`, `src/adapter.ts` and `src/staticServer.ts` each import
+  `assertWithin` from `src/paths.ts`, and none of the three retains a containment
+  comparison of its own.
+- UI11.8 Every refusal the three checks already make is still made: an absolute
+  stylesheet path, a stylesheet path relative to exactly `..`, an asset path
+  beginning `../`, and a request for `/../package.json` or `/%2e%2e/package.json`
+  each fail or 404 as they do today.
+- UI11.9 `README.md` states that a declared stylesheet or asset resolving outside
+  the repository root through a symbolic link is refused, so a consumer relying on
+  one reads why the build stopped.
+
+Out of scope: `src/merge.ts`, whose guarantee is the per-file fingerprint and not
+a path check (**C25**) — routing it through `paths` would suggest the path check
+is what protects the subtree, which is the belief that invariant exists to
+correct. Changing what `assertWithin` does: the contract specifies `realpath` on
+both sides before comparing, so the call sites order around it rather than
+relaxing it. Removing `isWithin` or `resolveFrom`. Extending containment to any
+path the three modules do not check today.

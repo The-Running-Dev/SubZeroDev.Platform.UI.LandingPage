@@ -1,5 +1,150 @@
 # Decisions
 
+### 2026-08-19 — `--base-path` is a deployment flag both generic forms honour
+
+Context: `/contract` verified **C29** against the tree and found the invariant
+holds for one generic form only. `--base-path` was added by the fix for #49 so a
+generic site deployed under a GitHub Pages project subpath addresses its own
+documents; `src/generic.ts` `buildGenericData` composes the options it writes
+from the JSON model alone and sets no base path, and `src/cli.ts` hands it no
+flags, so a JSON-generic site emits root-absolute links whatever the flag says.
+Nothing recorded the omission as deliberate — the flag appears in no prior entry,
+no slice, and not in `README.md`. This entry also supplies the record `C29`
+itself never had: the invariant entered `20-contract.md` describing shipped
+behaviour rather than a decision, so no alternatives were on file for it.
+Chosen: the code is the wrong side, and **C29** keeps its unqualified scope with
+a _decided, not yet in the tree_ marker naming `buildGenericData` as the gap —
+the same treatment **C10**, **C12**, **C28** and **C33** already carry. Breaking
+under a project subpath is a property of the deployment and not of the input form
+that produced the site, so the two generic forms cannot correctly differ here.
+The base path stays a CLI flag and does not become a field on the JSON model:
+one model deployed at a domain root and under a project subpath needs two
+prefixes and is one document, so a model-level field would have to be rewritten
+per deployment target by whoever publishes it.
+Rejected: **narrowing C29 to the legacy README/CHANGELOG form** and recording
+that a JSON-generic site cannot deploy under a project subpath — cheaper, and it
+makes the document true today, but it accepts the silent failure this design
+otherwise refuses: such a site builds green, `check` passes, and it serves with
+broken navigation and no stylesheet only once deployed. **Reading the gap as
+covered by C27** — both forms do converge on one `documentHtml`, so it was
+tempting to treat the markup convergence as covering the hrefs too; rejected
+because the convergence is on the writer and the drift is in what each caller
+computes to feed it, which is the distinction the amended C29 now states.
+Reversibility: cheap. Reversing means deleting one marker from **C29** and
+recording the limitation instead; no code has been written against it yet.
+
+### 2026-08-19 — `dev` resolves input mode through the ladder `build` owns, then branches by family
+
+Context: `/design` found `dev` and `build` disagreeing about which mode a site
+is in. Where a source map and a plain adapter module are both present, `build`
+selects the root JSON model and `dev` never reads the map at all — it finds the
+adapter file and serves it. The precedence is stated over input resolution
+generally in `20-contract.md`, `README.md` and the documentation site, so the
+same repository serves one site locally and ships another, and nothing says so.
+Chosen: the code is the wrong side. `dev` consults the same ladder, so the
+precedence is one rule rather than one rule with a command-shaped hole. The
+ladder decides _which site_; the site's family then decides _which server_ — an
+adapter-family site, however it was selected, is served by the Vite dev server,
+and a generic-family site is built and served statically. This is what keeps the
+fix from being a regression: the naive version sends every source-map site to
+build-and-serve, which would take the Vite dev server away from exactly the
+consumer whose combination this entry is about.
+Rejected: **reading `dev`'s behaviour as a deliberate preference for a local
+adapter over a published model**, and writing it into the contract as a stated
+exception — defensible, and cheaper today, but it splits four commands two-to-two
+on the same repository and makes the precedence something every reader has to
+learn twice. **Filing it and deciding later** — the false statement sits in the
+contract, the README and the published documentation meanwhile, and the answer
+was not in doubt once the divergence was named. **The uniform fix, sending any
+source-map site to build-and-serve** — most consistent with `build` and the
+smallest change, rejected because it silently withdraws HMR and per-request
+reload from the one combination being repaired.
+Reversibility: moderate. Aligning `dev` with the ladder is a behaviour change to
+a shipped command in the direction the documents already promise, so reversing
+it means contradicting them again.
+
+### 2026-08-19 — `dev` emits the runtime source map where it has prefetched, and refuses to start on an unreachable source
+
+Context: issue #39, and the half of the 2026-08-19 dev-stylesheets entry that was
+filed rather than answered. That entry scoped `#szd-json-sources` to built output
+because a faithful map is the _prefetched_ map, whose build-time entries carry
+resolved payloads inline, and no prefetch had run under `dev`. Two things have
+changed since. `dev` now resolves a data-backed adapter's sources at startup, so
+on that path a prefetch has run; and the prefetched map's build entries are
+inline values, so it depends on no scratch directory and survives the temporary
+directory's removal. `resolveDataBackedConfig` discards it anyway, and the source
+comment attributes that to the directory being gone — a reason that is not the
+operative one.
+Chosen: emit the map wherever `dev` has prefetched, so a consumer entry finds the
+same element with the same shape locally and in production. A declared source
+that is unreachable at startup ends the command rather than starting the server
+without it, which keeps one failure rule across the package.
+Rejected: **starting degraded on an unreachable source**, warning and serving
+without it — it would make `dev` the only path in this package that continues
+past a failed declared source, inverting the silence rule the whole
+input-resolution design rests on, and the page developed against would not be the
+page that ships. **Keeping the element out of `dev` and documenting the
+limitation** — the cheapest edit, and it leaves the divergence issue #39 was filed
+about in place; it also still needs a documentation change, because the reason
+currently given for the limitation stopped being true when `dev` acquired the
+prefetch.
+Reversibility: cheap for the emission — one argument at one call site, the same
+change the 2026-08-15 composed-runtime-sources entry made on the build path.
+Expensive for the refusal, once a consumer's workflow depends on `dev` starting
+offline.
+
+### 2026-08-19 — Filesystem containment is centralised in `src/paths.ts` rather than deleted
+
+Context: `/design` found `src/paths.ts` imported by nothing — no source module,
+no test — while three live modules each implement their own containment check,
+and not the same check: one rejects an absolute or exactly-`..` relative path,
+one compares against a resolved boundary, one tests only for a leading
+traversal. `assertWithin` is the only implementation that resolves symlinks
+before comparing, and it never runs. `20-contract.md` lists the module in its
+cross-module surface table with a constraint about that symlink resolution,
+which is therefore a promise about a caller that does not exist.
+Chosen: it is the intended owner and was never wired up. The three live checks
+route through it. That the three disagree with each other is the argument
+against leaving them as three — an invariant implemented once per caller is one
+that holds wherever someone remembered it, which is the shape `AGENTS.md`
+warns about under _Single ownership_.
+Rejected: **deleting the module and its contract row** — the cheaper and safer
+move, since it narrows nothing on a shipped path; rejected because containment
+then stays implemented three inconsistent ways with no symlink resolution
+anywhere, and the next author reaching for a fourth check has no owner to reach
+for. **Filing it and correcting only the false contract row** — it fixes the
+document and leaves the defect, and the row is not the part that matters.
+Reversibility: expensive in one direction. Routing through `assertWithin` is a
+narrowing: a symlinked stylesheet or asset resolving outside the root builds
+today and would stop, so withdrawing the narrowing later is fine but the
+narrowing itself needs a release that says so. `assertWithin` is also async
+where two of the three call sites are currently synchronous.
+
+### 2026-08-19 — The reusable Pages workflow owns its permissions and environment
+
+Context: `/contract` compared `AGENTS.md` § _Project identity_ against the tree
+and found the line "callers provide permissions, triggers, concurrency, and
+environments" false of two of its four items. `.github/workflows/deploy-pages.yml`
+declares neither a trigger nor concurrency, so those halves hold; its `deploy`
+job declares both `permissions` and `environment: github-pages`. The environment
+half is not a choice the workflow made — `workflow_call` exposes only `inputs`
+and `secrets`, so no caller has a mechanism to supply a called job's environment,
+and `actions/deploy-pages` requires one.
+
+Chosen: narrow the identity line to triggers and concurrency, and state that the
+deploy job's permissions and environment are the workflow's own, with the reason.
+The document was the side that was wrong.
+
+Rejected: dropping `permissions` from the called job so it inherits the caller's
+— it only closes half the gap, since `environment` cannot move regardless, and it
+breaks every existing caller that does not already declare `pages: write` and
+`id-token: write`. Rejected: leaving both and filing an issue — the misleading
+line sits in the binding agent contract meanwhile, and the answer was not in
+doubt. Rejected: reading "callers provide" as policy-in-spirit — an identity
+statement that cannot be checked against the tree is the kind that rots.
+
+Reversibility: cheap — one paragraph in `AGENTS.md`.
+
 ### 2026-08-19 — The dev server owes the built document's stylesheet links, but not its source map
 
 Context: `/reconcile` found two contract statements true of `build` and false of
@@ -643,3 +788,8 @@ one relative link in `README.md` that changed with them.
 ## Open
 
 Staging only. Once an item becomes a GitHub issue, `/track` removes it from here.
+
+- `--base-path` does not reach `src/generic.ts` `buildGenericData`, so a
+  JSON-generic site emits root-absolute self-links and stylesheet hrefs and
+  breaks under a GitHub Pages project subpath (2026-08-19 decision above). Needs
+  a bug issue filed from `.github/ISSUE_TEMPLATE/`, then `/fix`.
