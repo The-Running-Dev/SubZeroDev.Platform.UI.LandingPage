@@ -1,4 +1,4 @@
-import { exec as execCallback } from "node:child_process";
+import { exec as execCallback, spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 const exec = promisify(execCallback);
 const roots: string[] = [];
 const servers: Server[] = [];
+const children: Array<{ kill: () => void }> = [];
 
 const cli = join(process.cwd(), "src", "cli.ts");
 // A bare `--import tsx` resolves as a normal module specifier, which Node looks up from the
@@ -60,6 +61,7 @@ async function deadPort(): Promise<number> {
 }
 
 afterEach(async () => {
+  for (const child of children.splice(0)) child.kill();
   await Promise.all(
     servers.splice(0).map(
       (server) =>
@@ -72,6 +74,35 @@ afterEach(async () => {
     roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
   );
 });
+
+/**
+ * Spawns `dev` and resolves the URL it prints. An adapter site's `dev` is a Vite
+ * server, which announces `localhost` rather than the loopback literal the
+ * static-server path prints, so this accepts either.
+ */
+async function spawnDev(
+  root: string,
+): Promise<{ kill: () => void; base: string }> {
+  const child = spawn(process.execPath, ["--import", tsxLoader, cli, "dev"], {
+    cwd: root,
+  });
+  children.push(child);
+  let output = "";
+  const base = await new Promise<string>((resolvePromise, reject) => {
+    const scan = (chunk: Buffer): void => {
+      output += chunk.toString("utf8");
+      const match = output.match(/http:\/\/(?:localhost|127\.0\.0\.1):\d+/);
+      if (match) resolvePromise(match[0]);
+    };
+    child.stdout?.on("data", scan);
+    child.stderr?.on("data", scan);
+    child.on("exit", (code) =>
+      reject(new Error(`'dev' exited (${code}) before listening: ${output}`)),
+    );
+    child.on("error", reject);
+  });
+  return { base, kill: () => child.kill() };
+}
 
 describe("JSON source resolution", () => {
   it("builds one model identically from a local file and from a URL", async () => {
@@ -370,5 +401,64 @@ describe("JSON source resolution", () => {
     );
     expect(home).toContain('"x"');
     expect(home).not.toContain('"content"');
+  }, 60000);
+
+  it("reports declared adapter-source failures in declaration order, not grouped by failure class", async () => {
+    const root = await fixture(
+      "version: 1\nsources:\n  alpha:\n    at: build\n    path: site/alpha.json\n    cache: manual\n",
+    );
+    await writeFile(join(root, "site", "alpha.json"), "{}", "utf8");
+    // 'a' is declared first and fails its validator; 'b' is declared second and
+    // names an id the map does not hold. Collecting by failure class would put
+    // the missing id first, against the order the consumer wrote.
+    await writeFile(
+      join(root, "site", "landing.config.ts"),
+      `export default {
+         sources: {
+           a: { id: "alpha", validate: () => ({ ok: false as const, message: "alpha invalid" }) },
+           b: { id: "beta", validate: (raw: unknown) => ({ ok: true as const, value: raw }) },
+         },
+         config: () => ({ routes: [] }),
+       };`,
+      "utf8",
+    );
+    await expect(build(root)).rejects.toThrow(
+      /alpha invalid[\s\S]*'beta', which is not declared/,
+    );
+  }, 60000);
+
+  it("serves a data-backed adapter over the dev server instead of claiming its source map is absent", async () => {
+    const root = await fixture(
+      "version: 1\nsources:\n  projects:\n    at: build\n    path: site/projects.json\n    cache: manual\n",
+    );
+    await writeFile(
+      join(root, "site", "projects.json"),
+      JSON.stringify({ headline: "Composed in dev" }),
+      "utf8",
+    );
+    await writeFile(
+      join(root, "site", "landing.config.ts"),
+      `export default {
+         sources: { projects: { id: "projects", validate: (raw: any) => ({ ok: true as const, value: raw }) } },
+         config: ({ projects }: any) => ({
+           routes: [
+             {
+               path: "/",
+               body: "<main>" + projects.headline + "</main>",
+               metadata: { title: "Home", description: "Home page" },
+             },
+           ],
+         }),
+       };`,
+      "utf8",
+    );
+    const dev = await spawnDev(root);
+    try {
+      const home = await (await fetch(dev.base)).text();
+      expect(home).toContain("<main>Composed in dev</main>");
+      expect(home).toContain("<title>Home</title>");
+    } finally {
+      dev.kill();
+    }
   }, 60000);
 });

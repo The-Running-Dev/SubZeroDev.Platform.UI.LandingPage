@@ -37,6 +37,14 @@ and preferences belong in `AGENTS.md`.
   description, every example, the projection or serialised form, the generated
   representation, command help, the test list, and the troubleshooting page. The pair of
   documents where one is an implementation-of the other is where drift concentrates.
+- **An invariant stated over "the package" gets implemented on one code path and tested on
+  that one.** `styles` and `szd-json-sources` are both contract-level promises about every
+  custom-adapter route; both were emitted by `build` and by nothing in the dev server, across
+  three slices. UI8.3 _names_ site-wide stylesheet links as output that must not change and
+  still missed it, because the criterion was written about built output. **Cost: two false
+  contract statements, and a consumer's dev pages served unstyled, found only by running one
+  config through both paths and diffing the documents.** When a document says "every route",
+  find every writer of a route — the grep is for the call site, not the phrase.
 - **A stale cross-reference is invisible.** Section numbers cited across documents rot
   silently when a document is restructured. Positional numbering makes this worse: inserting
   a document between existing ones means renumbering everything after it and rewriting every

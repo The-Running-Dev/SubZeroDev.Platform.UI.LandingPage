@@ -455,12 +455,20 @@ function fsAllowGuardPlugin(allowed: readonly string[]): PluginOption {
   };
 }
 
+/**
+ * Serves an adapter site through Vite. `resolved` supplies an already-composed
+ * configuration — a data-backed adapter's, whose routes exist only once its
+ * declared sources have been resolved. When it is given, the route middleware
+ * holds it instead of reloading the module per request, because reloading would
+ * mean re-resolving (and refetching) every declared source on every navigation.
+ */
 export async function devAdapter(
   root: string,
   adapter: string,
+  resolved?: LandingPageConfig,
 ): Promise<import("vite").ViteDevServer> {
   const adapterPath = resolve(root, adapter);
-  const config = await loadAdapter(adapterPath);
+  const config = resolved ?? (await loadAdapter(adapterPath));
   const siteRoot = dirname(adapterPath);
   const allowed = [
     siteRoot,
@@ -475,8 +483,9 @@ export async function devAdapter(
         name: "szd-adapter-dev-routes",
         configureServer(devServer) {
           // Registered directly (not returned) so this runs before Vite's
-          // built-in middlewares, which would otherwise 404 first: neither
-          // "/" nor a route path like "/roadmap/" names a file on disk.
+          // built-in middlewares, which would otherwise 404 first: neither "/"
+          // nor a route path like "/roadmap/" names a file on disk, and neither
+          // does a site-wide stylesheet's emitted href.
           devServer.middlewares.use(async (request, response, next) => {
             if (request.method !== "GET" && request.method !== "HEAD") {
               next();
@@ -484,27 +493,46 @@ export async function devAdapter(
             }
             const pathname = new URL(request.url ?? "/", "http://localhost")
               .pathname;
-            const routePath =
-              pathname === "/" || pathname.endsWith("/")
-                ? pathname
-                : `${pathname}/`;
-            let route: LandingPageConfig["routes"][number] | undefined;
+            let current: LandingPageConfig;
+            let styles: SiteStyle[];
             try {
-              const current = await loadAdapter(adapterPath);
-              route = current.routes.find(
-                (candidate) => candidate.path === routePath,
-              );
+              current = resolved ?? (await loadAdapter(adapterPath));
+              styles = await readStyles(root, current.styles);
             } catch (error) {
               next(error as Error);
               return;
             }
+            // Answered from the bytes `readStyles` already read and contained, so
+            // a declared stylesheet outside the site root reaches the browser
+            // without widening `server.fs.allow` — which stays exactly the site
+            // root plus the resolved `allow` entries (design/20-contract.md,
+            // "Consumer Vite plugins").
+            const style = styles.find(
+              (candidate) => candidate.href === pathname,
+            );
+            if (style) {
+              response.setHeader("Content-Type", "text/css; charset=utf-8");
+              response.end(style.content);
+              return;
+            }
+            const routePath =
+              pathname === "/" || pathname.endsWith("/")
+                ? pathname
+                : `${pathname}/`;
+            const route = current.routes.find(
+              (candidate) => candidate.path === routePath,
+            );
             if (!route) {
               next();
               return;
             }
             const document = await devServer.transformIndexHtml(
               request.url ?? "/",
-              html(route, siteRoot),
+              html(
+                route,
+                siteRoot,
+                styles.map((candidate) => candidate.href),
+              ),
             );
             response.setHeader("Content-Type", "text/html");
             response.end(document);

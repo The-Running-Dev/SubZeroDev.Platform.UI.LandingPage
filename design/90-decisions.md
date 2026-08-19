@@ -1,5 +1,103 @@
 # Decisions
 
+### 2026-08-19 — The dev server owes the built document's stylesheet links, but not its source map
+
+Context: `/reconcile` found two contract statements true of `build` and false of
+the adapter dev server. Site-wide `styles` are stated over "every custom-adapter
+route, entry and body alike"; `szd-json-sources` over "every entry route with
+`dataSourceIds`". The dev middleware passed neither to the document generator, so
+one config produced a styled page with a source map under `build` and an
+unstyled page with none under `dev`. Both had been missed across UI5, UI7 and
+UI8 — UI8.3 names site-wide stylesheet links explicitly and still only checked
+built output.
+Chosen: fix the stylesheets, scope the source map. The two look symmetrical and
+are not. A stylesheet is a file the package has already read into memory and
+already contained, so the dev server answers the emitted href from those bytes —
+no sandbox change, no new field, no resolution step. The emitted source map is
+the _prefetched_ map, whose build-time entries carry resolved payloads inline
+rather than the declared path or URL, so a faithful one cannot exist before a
+build has run; emitting the public map instead would hand a consumer's loader a
+different shape than production does, which is worse than emitting nothing.
+Rejected: **scoping both to built output** — consistent on the page and worse in
+the tree, since it leaves a consumer's dev pages unstyled for no reason beyond
+symmetry with a limitation that does not apply to them. **Fixing both** — a
+faithful dev `szd-json-sources` means `dev` acquiring a prefetch step, and so a
+decision about whether `dev` resolves declared sources at all; that is `/design`'s
+question, not a reconciliation's, and it is filed under `## Open` rather than
+answered here. **Serving the stylesheet through Vite by widening `fs.allow`** —
+it would reopen the `fs.allow`-stays-package-owned entry below to serve a file
+the package is already holding.
+Reversibility: cheap both ways. The dev styles are one call site; the scoping is
+one paragraph over a property no consumer can have depended on, since it has
+never been true.
+
+### 2026-08-19 — `dev` resolves a data-backed adapter once, at startup
+
+Context: `/reconcile` found that `dev` could not serve a `defineLandingPageData`
+site at all. `devAdapter` loads the adapter through `loadAdapter`, which refuses a
+data-backed export with "declares build-time data sources, which need a JSON
+source map" — while the map sat beside it and `build` used it successfully. This
+is the same defect shape as the 2026-08-15 composed-runtime-sources entry: a
+message asserting an absence that is not there.
+Chosen: `dev` resolves the declared sources once before starting the server and
+hands `devAdapter` the composed configuration to hold. The absent-source-map
+error is kept, moved to where it is actually true — no map present — so the
+message and the condition finally agree.
+Rejected: **resolving per request, as the middleware already reloads a plain
+adapter's module** — it would refetch every declared source on every navigation,
+including remote ones, turning a page reload into network traffic proportional to
+the site's data. **Leaving `dev` unsupported and narrowing the design to say so**
+— it withdraws nothing a consumer could want less, and still needs a code change
+to stop the message claiming something false, so it is not the cheaper option it
+looks like.
+Reversibility: cheap. One optional parameter on an internal function and one
+branch in the CLI.
+Known cost, retained: a data-backed adapter's `dev` does not hot-reload its
+configuration, because reloading means re-resolving. Editing one needs a restart,
+the same trade generic `dev` already makes.
+
+### 2026-08-19 — `preview` forwards input flags and suppresses only the mode flags
+
+Context: the contract said `preview` "honours `--out-dir` and `--port` and no
+other flag". Verified false: on a generic site every input flag reaches the build
+it runs, so `preview --title X` serves a site titled X. The narrower gloss in the
+same sentence — that `--adapter` and `--source-map` are read past — is what the
+code holds.
+Chosen: correct the contract to the code. `preview` builds before serving, so it
+must read the flags that describe _what to build_; suppressing them would make
+`preview` and `build` given identical flags produce different sites, which is the
+disagree-about-mode hazard the ladder entry above exists to close, arriving by the
+other door. Only the two flags that select which _mode_ a site is in stay
+suppressed, because mode is `build`'s to resolve once.
+Rejected: **suppressing every flag but `--out-dir` and `--port`** — it makes the
+sentence true by making the command less useful and less consistent with `build`,
+and a consumer inspecting a site built with flags could no longer inspect that
+site.
+Reversibility: cheap. The sentence describes behaviour that has shipped since
+`preview` did.
+
+### 2026-08-19 — The two plugin guards added as UI8 hardening are stated invariants
+
+Context: `/reconcile` found `buildOutDirGuardPlugin` and the `server.fs.strict`
+checks implemented, documented in `README.md`, and absent from both
+`20-contract.md` and UI8's acceptance criteria. They arrived in a hardening commit
+closing bypasses found in review; the commit message is the only place the
+reasoning existed outside a source comment.
+Chosen: state both in the contract's plugin section, with the reason each is an
+invariant rather than a check. `fs.strict` is inseparable from `fs.allow` — it is
+what gives the list force — so refusing one and permitting the other would be a
+sandbox with a documented way out. `build.outDir` is trusted unconditionally by
+the step that lifts generated documents into place, so a redirected build is not a
+different output location but an unpredictable one.
+Rejected: **leaving them to `README.md`** — the contract owns invariants and the
+README owns CLI input and error behaviour; an invariant living only in the README
+is a promise the document that governs promises does not make. **Enforcing only
+at the `config` hook** — Vite never freezes the resolved configuration, so a
+plugin can mutate the running server from `configureServer` after every config
+hook has passed, which is the bypass the hardening commit closed.
+Reversibility: cheap for the wording. Withdrawing either guard is not: a consumer
+whose plugin works today does so because the guard permits it.
+
 ### 2026-08-19 — `preview` builds before serving
 
 Context: issue #5's own "one real decision," left open when the rest of
@@ -541,3 +639,20 @@ additive and repo-local; removing them is cheap. The `docs/` directory now
 means something different (a Docusaurus project, not two loose reference
 files) — reverting that shape change means moving files back and fixing the
 one relative link in `README.md` that changed with them.
+
+## Open
+
+Staging only. Once an item becomes a GitHub issue, `/track` removes it from here.
+
+- **An entry module reading `szd-json-sources` works under `build` and finds
+  nothing under `dev`.** Scoped out of the contract by the dev-parity entry above
+  rather than fixed: a faithful element needs the prefetched map, whose build-time
+  entries carry resolved payloads inline, which means `dev` acquiring a prefetch
+  step — and so a decision about whether `dev` resolves declared sources at all,
+  and what it does when a remote one is unreachable at startup. `/design`'s
+  question; `/track` to file it.
+- **`docs/docs/guide.md` is stale by two slices.** It documents neither
+  "Serving built output" nor "Consumer Vite plugins" — no mention of `preview`,
+  `dev`, `plugins`, or the shared static server — and states that `</` is escaped
+  in the emitted source map where the contract and the code escape every `<`.
+  Regenerate with `/make-human-docs`; `/reconcile` does not regenerate it.
