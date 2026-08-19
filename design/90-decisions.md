@@ -789,11 +789,6 @@ one relative link in `README.md` that changed with them.
 
 Staging only. Once an item becomes a GitHub issue, `/track` removes it from here.
 
-- `dev` does not resolve input mode through `build`'s ladder, and serves a plain
-  adapter where `build` serves the root JSON model (2026-08-19 decision above).
-- Filesystem containment is implemented three inconsistent ways and `src/paths.ts`
-  is imported by nothing (2026-08-19 decision above). The contract's cross-module
-  surface row for it now states this rather than claiming the module is wired up.
 - `--base-path` does not reach `src/generic.ts` `buildGenericData`, so a
   JSON-generic site emits root-absolute self-links and stylesheet hrefs and
   breaks under a GitHub Pages project subpath (2026-08-19 decision above). Needs
