@@ -61,6 +61,22 @@ async function resolveTarget(
 }
 
 /**
+ * Cuts a request target down to its pathname. The target is a path, not a URL:
+ * resolving it against a base would read a leading `//` as an authority, which
+ * both swallows the first segment and throws `ERR_INVALID_URL` when what
+ * follows is not a host — `GET //` would end the process rather than answer.
+ * Cutting at the first `?` or `#` is what keeps a query or a fragment off the
+ * filesystem, and leaves percent-encoding for `resolveWithinRoot` to decode
+ * exactly once.
+ */
+function pathnameOf(requestTarget: string | undefined): string {
+  const target = requestTarget ?? "/";
+  const end = target.search(/[?#]/);
+  const pathname = end === -1 ? target : target.slice(0, end);
+  return pathname.startsWith("/") ? pathname : `/${pathname}`;
+}
+
+/**
  * Serves an already-built site directory over `node:http`. `preview` and
  * generic `dev` share this implementation (design/20-contract.md, "Serving
  * built output") so the two can never diverge on resolution, containment, or
@@ -69,9 +85,8 @@ async function resolveTarget(
 export function createStaticServer(outDir: string): Server {
   const root = resolve(outDir);
   return createServer((request, response) => {
-    const url = new URL(request.url ?? "/", "http://localhost");
     void (async () => {
-      const target = await resolveTarget(root, url.pathname);
+      const target = await resolveTarget(root, pathnameOf(request.url));
       const data = target
         ? await readFile(target).catch(() => undefined)
         : undefined;

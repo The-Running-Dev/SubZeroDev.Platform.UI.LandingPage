@@ -18,7 +18,9 @@ optional `site/theme.css`, and optional `site/public/`. The build writes
 ## Commands
 
 - `build` writes the built site to `site/dist/` (or `--out-dir`).
-- `dev` serves the site locally, rebuilding on each request.
+- `dev` serves the site locally: a custom-adapter site through Vite's dev
+  server, which transforms on request; a generic site by building once at
+  startup and serving that output, so a source edit needs a restart.
 - `preview` builds, then serves the real built output — the same tree `build`
   writes, fingerprinted asset names and all — on `--out-dir` (default
   `site/dist/`) and `--port` (default `4173`).

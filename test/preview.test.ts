@@ -110,6 +110,21 @@ describe("static server: resolution and containment", () => {
     expect((await rawGet(base, "/nope")).status).toBe(404);
   });
 
+  it("treats a request target beginning with '//' as a path, not an authority — the server answers rather than dying (UI9.1)", async () => {
+    const root = await fixtureRoot();
+    const outDir = await plainOutDir(root);
+    const base = await listen(outDir);
+
+    // '//' has no parseable host, so resolving it against a base throws; the
+    // first segment of '//assets/app.js' would be eaten as one. Either way the
+    // process must survive and the path must reach the filesystem intact.
+    expect((await rawGet(base, "//")).body).toBe("<html>home</html>");
+    expect((await rawGet(base, "//?v=1")).body).toBe("<html>home</html>");
+    const asset = await rawGet(base, "//assets/app.js");
+    expect(asset.status).toBe(200);
+    expect(asset.body).toBe("console.log('js')");
+  });
+
   it("derives Content-Type from the extension, and still carries a header for an unmapped one (UI9.2)", async () => {
     const root = await fixtureRoot();
     const outDir = await plainOutDir(root);
@@ -254,7 +269,7 @@ async function spawnServer(
 }
 
 describe("preview command", () => {
-  it("builds first, then serves --out-dir on --port, ignoring an --adapter naming a module that does not exist (UI9.5, UI9.8)", async () => {
+  it("builds first, then serves --out-dir on --port, ignoring an --adapter and a --source-map that would each change what is built (UI9.5, UI9.8)", async () => {
     const root = await fixtureRoot();
     await mkdir(join(root, "site"), { recursive: true });
     await writeFile(
@@ -267,6 +282,16 @@ describe("preview command", () => {
       "# Changelog\n\n- one\n",
       "utf8",
     );
+    // Both flags name something that exists, or fails, only if read: an adapter
+    // module that builds and emits a body nothing else emits, and a source map
+    // path that is absent — which `build` rejects when `--source-map` is given.
+    // A `preview` honouring either would serve the adapter body or not start at
+    // all, so this fails if the suppression in `build`'s arguments is dropped.
+    await writeFile(
+      join(root, "site", "other.config.ts"),
+      `export default { routes: [ { path: "/", body: "<main>adapter body</main>", metadata: { title: "Other", description: "Other page" } } ] };`,
+      "utf8",
+    );
     const outDir = join(root, "custom-out");
 
     const first = await spawnServer(root, "preview", [
@@ -275,10 +300,14 @@ describe("preview command", () => {
       "--port",
       "0",
       "--adapter",
-      "site/does-not-exist.ts",
+      "site/other.config.ts",
+      "--source-map",
+      "site/absent.sources.yml",
     ]);
     expect(first.base).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-    expect((await rawGet(first.base, "/")).body).toContain("Original body");
+    const served = await rawGet(first.base, "/");
+    expect(served.body).toContain("Original body");
+    expect(served.body).not.toContain("adapter body");
     first.kill();
     await readFile(join(outDir, "index.html"), "utf8");
 

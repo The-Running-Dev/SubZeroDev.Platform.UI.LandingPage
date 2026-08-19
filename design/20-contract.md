@@ -146,11 +146,12 @@ default.
 
 ## Serving built output
 
-`preview` serves an already-built `outDir` over `node:http` for generic and
-custom-adapter sites alike. It reads no adapter module and no source map: the
-built tree is its whole input, so the command cannot branch on input mode and
-cannot disagree with `build` about which mode a site is in. It honours
-`--out-dir` and `--port` and no other flag.
+`preview` serves a built `outDir` over `node:http` for generic and
+custom-adapter sites alike. It honours `--out-dir` and `--port` and no other
+flag: `--adapter` and `--source-map` are read past, not forwarded. Mode is
+resolved once, inside the `build` it runs (below), and never a second time
+here — the command holds no precedence ladder of its own, so it cannot
+disagree with `build` about which mode a site is in.
 
 One static server implementation serves both `preview` and generic `dev`. A
 second copy is what would let the two diverge on resolution, containment or

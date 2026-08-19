@@ -40,7 +40,7 @@ later withdraw, for a need issue #4 demonstrated only for `dev`.
 Reversibility: expensive. Once a consumer's `build` depends on a declared
 plugin, narrowing the field to dev-only is a breaking change.
 
-### 2026-08-19 — `preview` is mode-agnostic and shares one static server with `dev`
+### 2026-08-19 — `preview` holds no ladder of its own and shares one static server with `dev`
 
 Context: issue #5. The static file server exists but only on `dev`'s generic
 branch, so an adapter consumer cannot look at its built output without
@@ -48,9 +48,10 @@ reinstating the direct `vite` dependency the package exists to remove. Two
 shapes were available: a `preview` that resolves input mode the way `build`
 does and serves accordingly, or one that treats the built tree as its whole
 input.
-Chosen: `preview` reads no adapter module and no source map. `outDir` is the
-input; `--out-dir` and `--port` are the only flags. One static server
-implementation serves both `preview` and generic `dev`.
+Chosen: `preview` holds no precedence ladder of its own. `--out-dir` and
+`--port` are the only flags it honours; `--adapter` and `--source-map` are read
+past, not forwarded. One static server implementation serves both `preview` and
+generic `dev`.
 Rejected: **resolving input mode in `preview`** — it would duplicate `build`'s
 precedence ladder in a command that serves files, and give the two a way to
 disagree about which mode a site is in while one of them is being used to check
@@ -58,9 +59,21 @@ the other's output. **A second server implementation for adapter mode** — the
 duplication issue #5 explicitly rules out, and the copies would drift on the
 three things that decide whether the built site actually runs: resolution,
 containment and content type.
-Reversibility: cheap for the server sharing. Adding mode resolution to
-`preview` later would be a behaviour change to a shipped command, so that
+Reversibility: cheap for the server sharing. Adding a second, `preview`-owned
+ladder later would be a behaviour change to a shipped command, so that
 direction is not.
+
+Amended 2026-08-19, same day. As first written, `Chosen` read "`preview` reads
+no adapter module and no source map. `outDir` is the input" and `Rejected`
+ruled out resolving input mode at all — which the build-before-serving decision
+above, taken later the same day, contradicts outright, since building requires
+resolving mode. Build-first is the one in force, and the wording here is
+narrowed to what this decision was actually protecting, which still holds: mode
+is resolved once, in `build`. `preview` calls `build` rather than reimplementing
+its ladder, so the duplication and the disagree-about-mode hazard named under
+`Rejected` are both closed — more firmly than a serve-only `preview` would have
+closed them. Read `Rejected` as ruling out a _second_ ladder, not the one
+`build` already owns.
 
 ### 2026-08-19 — The shared static server normalises directory URLs, contains resolution to `outDir`, and sets `Content-Type`
 
