@@ -62,7 +62,7 @@ package version exactly.
 
 ### UI4 — JSON-backed landing data
 
-**Status:** implementation complete; validator tests complete; release pending
+**Status:** complete
 
 Delivers a versioned JSON site model through `subzerodev-data-json`, preferred
 when a public source map exists and falling back to the current TypeScript
@@ -86,11 +86,18 @@ failed root model with another declared `at: build` source, and only when the
 root is the single failure. See `90-decisions.md` § _A failed root model may
 fall back to a declared source, opt-in and loudly_.
 
-**Remaining:** the release. The rejection branches this entry previously listed
-as untested — `data.ts` on version, kind, markdown and metadata shape, icon
-`rel` and Open Graph numeric fields, and `filteredMap` on an unknown id and a
-runtime file source — all carry negative tests in `test/index.test.ts` and
-`test/adapter.test.ts`.
+**Met 2026-08-13:** the `data.ts` rejection branches — version, kind, markdown
+and metadata shape, icon `rel`, Open Graph numeric fields — now have negative
+tests in `test/index.test.ts`, and `filteredMap`'s unknown-id and
+runtime-file-source errors have them in `test/adapter.test.ts`, closing the last
+gap against _Done when_.
+
+Published handoff: npm `subzerodev-platform-ui-landing-page@0.4.1` from
+source commit `3f1addd0b4c0bfa9dac4c0725a86d2e8e5d6edd1`; consumers pin the
+package version exactly. `0.4.1` supersedes `0.4.0`, which was published from
+this slice but reported only the first failing declared adapter source, so
+correcting one malformed input revealed the next rather than all of them. Do not
+pin `0.4.0`.
 
 ### UI5 — Every caller reaches the same document writer
 
