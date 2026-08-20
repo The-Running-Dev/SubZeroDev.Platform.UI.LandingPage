@@ -289,8 +289,9 @@ does (`90-decisions.md`, 2026-08-18) — and why the surface goes unexercised, a
 why the gap survived unrecorded (`90-decisions.md`, 2026-08-19).
 
 `action.yml`'s `package-version` stays optional, and its default names `latest`
-rather than a released version. A pinned default is a value with nothing to keep
-it current: this one reached four minor releases out of date without anything
+rather than a released version — _decided, not yet in the tree: the default is
+still the pinned `0.1.0`._ A pinned default is a value with nothing to keep it
+current: this one reached four minor releases out of date without anything
 noticing, which is the argument for removing it rather than relocating it. The
 cost is stated rather than hidden — two runs of the same caller workflow may
 install different builds, so a deploy through this surface is current rather than
