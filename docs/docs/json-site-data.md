@@ -4,7 +4,7 @@ sidebar_position: 4
 
 # JSON-backed site data
 
-`subzerodev-platform-ui-landing-page@0.4.0` can build a site from a versioned
+`subzerodev-platform-ui-landing-page@0.5.0` can build a site from a versioned
 JSON model selected through `subzerodev-data-json@0.2.0`. This is a build-time
 input: the root site model always declares `at: build`.
 
@@ -13,7 +13,7 @@ input: the root site model always declares `at: build`.
 Install both exact versions, then add these two files.
 
 ```powershell
-npm install --save-dev subzerodev-platform-ui-landing-page@0.4.0 subzerodev-data-json@0.2.0
+npm install --save-dev subzerodev-platform-ui-landing-page@0.5.0 subzerodev-data-json@0.2.0
 ```
 
 ```yaml
