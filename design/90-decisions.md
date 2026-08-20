@@ -907,3 +907,14 @@ one relative link in `README.md` that changed with them.
 ## Open
 
 Staging only. Once an item becomes a GitHub issue, `/track` removes it from here.
+
+- **The GitHub delivery surface cannot forward `--base-path`.** `action.yml`
+  takes `command`, `docs-output` and `package-version`, and
+  `deploy-pages.yml` takes `docs-artifact` and `package-version`; neither
+  accepts an arbitrary CLI flag. A consumer deploying a generic site through
+  either onto a GitHub Pages project subpath gets root-absolute self-links and
+  stylesheet hrefs, and so serves unstyled with broken navigation. With
+  **C29** now holding on both generic forms, this is the only place that
+  failure survives, and the only one with no way for the caller to avoid it.
+  Adding an input is a change to a public delivery surface, so it needs a
+  contract amendment rather than a fix.
