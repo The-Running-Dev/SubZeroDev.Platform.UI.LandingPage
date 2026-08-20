@@ -357,8 +357,8 @@ day; each is logged in [`90-decisions.md`](90-decisions.md) with its rejected
 alternatives, and the design above states the decided behaviour rather than the
 question. All three are now in the tree — `dev` resolves through the ladder and
 emits the prefetched map (UI10), containment has one owner that follows symbolic
-links (UI11), and `--base-path` reaches both generic forms (#63). Nothing in
-[`20-contract.md`](20-contract.md) is now marked _decided, not yet in the tree_;
-the one place the base-path failure still occurs is the GitHub delivery surface,
-which forwards no CLI flag and is recorded there as a limitation rather than an
-invariant.
+links (UI11), and `--base-path` reaches both generic forms (#63). The one place the base-path
+failure still occurs is the GitHub delivery surface, which forwards no CLI flag;
+[`20-contract.md`](20-contract.md) now specifies the named inputs that close it
+(**C34**, **C35**) and marks both _decided, not yet in the tree_ pending the
+slice issue #60 tracks.
