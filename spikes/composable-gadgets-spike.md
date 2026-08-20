@@ -420,7 +420,7 @@ surfaced an asymmetry the bar does not account for:
 
 So the boundary is forced by the host, not by a second gadget.
 
-**Recommended: one small package, three export paths.**
+**Decided 2026-08-20: one small package, three export paths.**
 
 ```
 SubZeroDev.Platform.UI.Gadget
@@ -440,7 +440,17 @@ before anyone notices. Reversal is cheap in both directions — the code is pure
 types plus stateless functions — so this is a judgement about which cost is
 more visible, not about which is permanent.
 
-**This is the one genuine fork in the record and it needs a decision.**
+**Decision, 2026-08-20.** The package. The deciding argument is the asymmetry
+above and not the issue's two-module bar: a second _gadget_ would have made the
+package convenient, whereas the first _host_ already makes it necessary, and
+the bar as written cannot see that. The alternative was rejected because its
+cost — the contract's identity living inside a product package, and the host
+half duplicated before anyone notices — is the less visible of the two, and
+this is a boundary that is cheap to move in either direction (pure types plus
+stateless functions) but expensive to move _late_, once consumers exist.
+
+Reversibility: cheap. Nothing here holds state, and the export paths are the
+only public surface.
 
 ### Relationship to LandingPage
 
