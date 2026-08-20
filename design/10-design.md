@@ -355,9 +355,10 @@ ones a reader is least likely to check twice
 None. The three this rewrite raised were put to the owner and answered the same
 day; each is logged in [`90-decisions.md`](90-decisions.md) with its rejected
 alternatives, and the design above states the decided behaviour rather than the
-question. Two of the three are now in the tree — `dev` resolves through the
-ladder and emits the prefetched map (UI10), and containment has one owner that
-follows symbolic links (UI11). The third is not: `--base-path` still does not
-reach the JSON generic form, which [`20-contract.md`](20-contract.md) **C29**
-marks _decided, not yet in the tree_ and `90-decisions.md` § _Open_ stages for a
-bug issue.
+question. All three are now in the tree — `dev` resolves through the ladder and
+emits the prefetched map (UI10), containment has one owner that follows symbolic
+links (UI11), and `--base-path` reaches both generic forms (#63). Nothing in
+[`20-contract.md`](20-contract.md) is now marked _decided, not yet in the tree_;
+the one place the base-path failure still occurs is the GitHub delivery surface,
+which forwards no CLI flag and is recorded there as a limitation rather than an
+invariant.

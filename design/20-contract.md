@@ -211,13 +211,13 @@ is trustworthy.
 
 **`--base-path`** normalises to a leading and trailing `/`, defaulting to `/`.
 It prefixes the generic shell's own self-links and stylesheet hrefs so a site
-deployed under a project subpath addresses its own documents; it does not reach
-the custom-adapter forms, whose entry paths are `/`-relative to the site root
-Vite is given. It is a deployment flag rather than a content one, which is why
-it is a flag and not a field on the JSON model: the same model deployed at a
-domain root and under a project subpath needs two different prefixes and is one
-document. _Decided, not yet in the tree_ (`90-decisions.md`, 2026-08-19): today
-the flag reaches only the legacy generic form (**C29**).
+deployed under a project subpath addresses its own documents, and it does so on
+both generic forms (**C29**); it does not reach the custom-adapter forms, whose
+entry paths are `/`-relative to the site root Vite is given. It is a deployment
+flag rather than a content one, which is why it is a flag and not a field on the
+JSON model: the same model deployed at a domain root and under a project subpath
+needs two different prefixes and is one document, so a value that belongs to the
+deployment must not be carried by the document that describes the site.
 
 **`dev` selects the site through the same ladder, then branches on family.** The
 ladder decides _which_ site; the site's family decides which server — an
@@ -265,11 +265,14 @@ either, and `actions/deploy-pages` requires the environment
 (`90-decisions.md`, 2026-08-19).
 
 **Neither forwards a CLI flag, so `--base-path` cannot reach a build run this
-way.** A legacy generic site deployed through this surface onto a GitHub Pages
-project subpath emits root-absolute self-links and stylesheet hrefs, and so
-serves unstyled with broken navigation — the same failure **C29** names for the
-JSON generic form, reached from the supported delivery path rather than from an
-input form. `action.yml`'s default `package-version` and the action SHA
+way.** A generic site of either form deployed through this surface onto a GitHub
+Pages project subpath emits root-absolute self-links and stylesheet hrefs, and
+so serves unstyled with broken navigation. **This is now the only place that
+failure survives**: **C29** holds on both generic forms, and what is missing
+here is not the prefixing but any route by which a caller could ask for it.
+Reaching the flag means bypassing this surface and invoking the CLI directly,
+which is what this repository's own deployment does. `action.yml`'s default
+`package-version` and the action SHA
 `deploy-pages.yml` pins have both stayed at the initial release, so a caller
 that omits the version installs one older than [`README.md`](../README.md)
 instructs. This is a limitation and carries no id, because nothing checks it; it
@@ -289,7 +292,7 @@ constraint each surface carries beyond its signature.
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`src/route.ts`](../src/route.ts)               | `assertRoutePath`, `assertRoute`, `assertUniquePaths`, `isBodyRoute`                                          | Every caller that can reach the write path must call these; the write path calls them again regardless (**C1**–**C4**)                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | [`src/adapter.ts`](../src/adapter.ts)           | `html`, `buildAdapterConfig`, `buildAdapter`, `devAdapter`, `hasAdapter`, `loadAdapterExport`, `isDataBacked` | `html` is exported for direct testing, not for consumers. `buildAdapterConfig` is the single document writer every custom-adapter route form and input mode reaches (**C27**)                                                                                                                                                                                                                                                                                                                                                                |
-| [`src/generic.ts`](../src/generic.ts)           | `buildGeneric`, `buildGenericData`, `GenericOptions`                                                          | Two entry points, one `documentHtml` — the legacy and JSON generic forms may not drift on markup (**C27**). Each entry point still composes the `GenericOptions` it feeds in, which is where they do currently differ (**C29**)                                                                                                                                                                                                                                                                                                              |
+| [`src/generic.ts`](../src/generic.ts)           | `buildGeneric`, `buildGenericData`, `GenericOptions`                                                          | Two entry points, one `documentHtml` — the legacy and JSON generic forms may not drift on markup (**C27**). Each entry point still composes the `GenericOptions` it feeds in, and a deployment-scoped value must reach both or neither: that is the seam **C29** regressed through once, and nothing at the shared writer would catch it happening again                                                                                                                                                                                     |
 | [`src/staticServer.ts`](../src/staticServer.ts) | `createStaticServer`                                                                                          | One implementation serves `preview` and generic `dev`; a second copy is what would let them diverge on resolution, containment or content type                                                                                                                                                                                                                                                                                                                                                                                               |
 | [`src/data.ts`](../src/data.ts)                 | `validateLandingPageData`, and the model types `src/index.ts` re-exports                                      | Rejects unknown fields; every rejection branch carries a negative test                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | [`src/paths.ts`](../src/paths.ts)               | `assertWithin`, `assertWithinResolved`, `assertWithinOrThrow`                                                 | The single owner of containment; `src/generic.ts`, `src/adapter.ts` and `src/staticServer.ts` route every check through it (**C33**). `assertWithinResolved` takes an already-resolved parent, for a caller that would otherwise re-resolve one root per request or per iteration. `resolveFrom` and `isWithin` are exported but reach no other module, and `isWithin` is kept exported deliberately: it is the lexical comparison both assert functions are built on, it resolves no symlink, and it is never a containment check by itself |
@@ -530,16 +533,22 @@ document. Only the code-enforced ones may be trusted without checking.
   command written to inspect it.
 - **C29** Generic self-links and stylesheet hrefs are prefixed with the
   normalised `--base-path`, which defaults to `/` — on both generic forms.
-  _`src/generic.ts` `normalizeBasePath`, `documentHtml`; code for the legacy
-  README/CHANGELOG form. **Decided, not yet in the tree** for the JSON generic
-  form (`90-decisions.md`, 2026-08-19)._ Today `buildGenericData` composes the
-  options it writes from the model alone and sets no base path, and `src/cli.ts`
-  hands it no flags, so a JSON-generic site emits root-absolute links whatever
-  the flag says. Breaking under a project subpath is a property of the
-  deployment and not of the input form that produced the site, so the two forms
-  cannot correctly differ here. **C27**'s convergence does not cover this:
-  sharing `documentHtml` fixes the markup, and leaves each entry point free to
-  compute a different value to feed it.
+  _`src/generic.ts` `normalizeBasePath` and `documentHtml`, reached from
+  `buildGeneric` and `buildGenericData` alike, each handed the flag by
+  `src/cli.ts` on its `build` and its `dev` path; structurally._ Breaking under
+  a project subpath is a property of the deployment and not of the input form
+  that produced the site, so the two forms cannot correctly differ here.
+  **This is the weakest structural holding in the document and is stated as
+  such**: nothing refuses anything. The prefix is applied wherever a base path
+  arrives, and the arrangement that makes it arrive is a parameter threaded
+  through each entry point separately. **C27**'s convergence does not cover it
+  — sharing `documentHtml` fixes the markup and leaves each entry point free to
+  compute a different value to feed it, which is exactly the gap the JSON form
+  shipped through for a release (`90-decisions.md`, 2026-08-19). The check that
+  exists is a test per form in
+  [`test/generic.test.ts`](../test/generic.test.ts), one asserting the prefix on
+  each entry point and one asserting the root-absolute default; a third entry
+  point would add no failing test by existing.
 - **C32** `preview` builds before serving, and serves the `outDir` that build
   produced. There is no `--no-build` escape and no absent-`outDir` error.
   _`src/cli.ts`; structurally._ The accepted cost is that a build failing after
