@@ -77,21 +77,15 @@ jobs:
         run: npm install --global subzerodev-platform-ui-landing-page@${{ env.PACKAGE_VERSION }}
 
       - name: Generate changelog (build-only, never committed)
-        # --repository works around inferRepository's regex rejecting this
-        # org's dotted repo names (see design/90-decisions.md and the
-        # spawned fix task) rather than relying on inference here.
-        run: subzerodev-platform-ui-landing-page generate-changelog --repository ${{ github.repository }}
+        run: subzerodev-platform-ui-landing-page generate-changelog
 
       - name: Build landing page
-        # --repository-url works around the same inferRepository regex bug
-        # noted above, which would otherwise silently drop the nav's
-        # Repository link.
         # --docs-url carries the Pages project subpath, matching `baseUrl` in
         # docs/docusaurus.config.ts — unlike the shell's own hardcoded paths
         # noted above, this one is the caller's to get right.
         # --base-path is the shell's own project-subpath prefix for its
         # stylesheet links and Home/Changelog nav (issue #48, issue #50).
-        run: subzerodev-platform-ui-landing-page build --docs-url /SubZeroDev.Platform.UI.LandingPage/docs/ --repository-url https://github.com/${{ github.repository }} --base-path /SubZeroDev.Platform.UI.LandingPage/
+        run: subzerodev-platform-ui-landing-page build --docs-url /SubZeroDev.Platform.UI.LandingPage/docs/ --base-path /SubZeroDev.Platform.UI.LandingPage/
 
       - name: Merge landing page into documentation build
         run: subzerodev-platform-ui-landing-page merge --docs-output docs/build

@@ -23,7 +23,7 @@
     {
       "name": "npm test (vitest run)",
       "status": "Passed",
-      "detail": "Test Files 10 passed (10); Tests 112 passed (112); Duration 39.79s (transform 1.29s, setup 0ms, import 3.27s, tests 83.82s)."
+      "detail": "Test Files 10 passed (10); Tests 112 passed (112); Duration 42.66s (transform 799ms, setup 0ms, import 3.50s, tests 91.20s)."
     },
     {
       "name": "npm run pack:check (npm pack --dry-run)",
@@ -43,7 +43,7 @@
     {
       "name": "Pester tests (Invoke-Pester -Path tools)",
       "status": "Passed",
-      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru: Tests Passed: 113, Failed: 0, Skipped: 0, Inconclusive: 0, NotRun: 0. PassedCount 113, FailedCount 0, FailedBlocksCount 0, FailedContainersCount 0, TotalCount 113."
+      "detail": "Invoke-Pester -Path tools -Output None -PassThru: PassedCount 113, FailedCount 0, TotalCount 113."
     },
     {
       "name": "git diff --check",
@@ -53,7 +53,7 @@
     {
       "name": "Docusaurus docs build (docs/, npm run build)",
       "status": "DidNotRun",
-      "reason": "Not CI-gated (no `# verification: true` flag on any step in .github/workflows/*.yml, and no such flagged step exists for this repository at all — grep for the flag returned no matches). docs/node_modules is not installed locally. This PR touches only design/20-contract.md and design/10-design.md, neither of which docs/ builds from, so it was not run."
+      "reason": "Not CI-gated (no `# verification: true` flag on any step in .github/workflows/*.yml, and no such flagged step exists for this repository at all — grep for the flag returned no matches). docs/node_modules is not installed locally. This merge only carries design/20-contract.md, design/10-design.md, and the pre-existing main-branch changes to pages.yml/90-decisions.md/json-site-data.md through — none of which the docs site builds from."
     }
   ]
 }
