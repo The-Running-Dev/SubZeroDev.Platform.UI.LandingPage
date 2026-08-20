@@ -1,0 +1,98 @@
+name: Deploy self-hosted landing page and docs
+
+# This repository dogfoods its own package: the landing page consumes the
+# generic README/CHANGELOG mode (this repo has no product UI to justify a
+# custom adapter), and the docs/ Docusaurus project is a standalone npm
+# project rather than GameEngine's private docs-template container image —
+# this repo has no PowerShell/Docker tooling to host that image, and adding
+# it would be a much larger infrastructure decision than this workflow needs.
+# See design/90-decisions.md for both calls.
+#
+# Deployment policy (this file) is caller-owned per the package's own
+# contract (README.md "Deploying") — the package supplies only the `build`
+# and `merge` CLI commands consumed below via npx, pinned to the published
+# version, the same way any external consumer's workflow would.
+#
+# Formerly a known, accepted limitation: the generic-mode shell hardcoded
+# root-absolute paths — its nav links (`/`, `/changelog/`) and, more
+# consequentially, its own stylesheet links (`/assets/szd-base.css`,
+# `/assets/theme.css`). This repository has no custom domain, so the site
+# deploys to the default GitHub Pages project subpath
+# (https://the-running-dev.github.io/SubZeroDev.Platform.UI.LandingPage/)
+# rather than a domain root, and every one of those paths resolved above the
+# deployed site — the same reason GameEngine uses a custom domain. Fixed via
+# a `--base-path` flag (issue #48, released as 0.5.0) and wired in below via
+# the "Build landing page" step's `--base-path`. See design/90-decisions.md
+# and issue #50.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  PACKAGE_VERSION: "0.5.0"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # generate-changelog reads first-parent history for the whole repo.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Build documentation site
+        working-directory: docs
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install the published package
+        # A plain `npx subzerodev-platform-ui-landing-page@<version> ...` run
+        # from the repo root resolves to *this* repo's own unbuilt
+        # package.json (same name, same bin) instead of fetching the
+        # registry tarball, since npm exec prefers a same-name bin already
+        # declared by the cwd's project — and this workflow never builds
+        # dist/ at the repo root. A global install puts the published bin on
+        # PATH directly, sidestepping that resolution entirely. See
+        # design/90-decisions.md and issue #43.
+        run: npm install --global subzerodev-platform-ui-landing-page@${{ env.PACKAGE_VERSION }}
+
+      - name: Generate changelog (build-only, never committed)
+        run: subzerodev-platform-ui-landing-page generate-changelog
+
+      - name: Build landing page
+        # --docs-url carries the Pages project subpath, matching `baseUrl` in
+        # docs/docusaurus.config.ts — unlike the shell's own hardcoded paths
+        # noted above, this one is the caller's to get right.
+        # --base-path is the shell's own project-subpath prefix for its
+        # stylesheet links and Home/Changelog nav (issue #48, issue #50).
+        run: subzerodev-platform-ui-landing-page build --docs-url /SubZeroDev.Platform.UI.LandingPage/docs/ --base-path /SubZeroDev.Platform.UI.LandingPage/
+
+      - name: Merge landing page into documentation build
+        run: subzerodev-platform-ui-landing-page merge --docs-output docs/build
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/build
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

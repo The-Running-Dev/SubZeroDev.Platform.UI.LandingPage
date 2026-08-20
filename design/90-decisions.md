@@ -1,5 +1,637 @@
 # Decisions
 
+### 2026-08-19 — `pages.yml`'s repository-inference workarounds are retained with the stated cause marked unverified
+
+Context: `.github/workflows/pages.yml` passes `--repository` to
+`generate-changelog` and `--repository-url` to `build`, both commented as working
+around `src/git.ts` `inferRepository` rejecting this organisation's dotted
+repository names, and both citing this file and "the spawned fix task".
+`/reconcile` found no entry here and could not reproduce the defect: running
+`repositoryFromRemote`'s expression directly against four remote forms of this
+repository's name — HTTPS with and without `.git`, SSH with `.git`, and an
+undotted control — returned the correct `owner/name` every time. The CI
+environment was not reproduced, so what actually failed there is unknown.
+Chosen: keep both flags and record the cause as **unverified**. The stated
+diagnosis is not supported by the regex, so it must not be inherited as fact by
+whoever next reads those comments; the flags stay because they are correct
+regardless of cause — passing the repository explicitly is what a caller-owned
+workflow ought to do — and removing them tests the hypothesis in the deploy path.
+Diagnosis is filed rather than done here.
+Rejected: **deleting the flags to see whether the deploy still works** — the
+experiment runs in production, and a wrong answer ships a landing page with no
+Repository link and a failed changelog step. **Correcting only the workflow
+comments and writing no entry** — cheaper, but it leaves two workarounds with no
+recorded reason, which is how they get removed later by someone who reads the
+corrected comment as "unnecessary". **Treating the flags as plainly redundant and
+the comments as simply wrong** — possible, and it may prove true, but the failure
+was observed by someone and the regex is only one of the two things
+`inferRepository` depends on; `git config --get remote.origin.url` under
+`actions/checkout` is not ruled out, and neither is the published `0.5.0`
+differing from this tree.
+Reversibility: cheap. If diagnosis clears `inferRepository`, both flags and both
+comments come out in one commit.
+
+### 2026-08-19 — The self-hosted deploy installs the published package globally rather than invoking it through `npx`
+
+Context: the 2026-08-18 entry below chose to invoke the package "via `npx`
+against the last-published version, exactly as any external consumer would".
+That does not work from this repository's own root, and the reason is specific to
+dogfooding: `npm exec` prefers a same-name binary already declared by the current
+project, so `npx subzerodev-platform-ui-landing-page@<version> …` resolves to
+_this_ repository's `package.json` — same name, same `bin` — instead of fetching
+the registry tarball, and the Pages workflow never builds `dist/` at the
+repository root, so the resolved binary does not exist. `/reconcile` found the
+change already in the tree (commit `6d63f9f`) with the reasoning in a workflow
+comment that points at this file, and nothing here to point at.
+Chosen: install the published package globally, putting the published binary on
+`PATH` and sidestepping `npm exec`'s resolution entirely. The 2026-08-18 entry
+keeps its wording — this file is append-only, and that the `npx` form was chosen
+and then failed is the part worth keeping.
+Rejected: **building `dist/` at the repository root in the workflow** so the
+same-name resolution finds a real binary — it would make the deploy exercise the
+working tree rather than the published artifact, which is the one property the
+2026-08-18 entry chose `npx` for in the first place. **Renaming the repository's
+own package or `bin`** to break the collision — a public-surface change made to
+work around a local tooling behaviour. **Invoking the tarball path explicitly**
+— possible, but it encodes npm's cache layout into a workflow.
+Reversibility: cheap. Reversing is one workflow step, and the constraint is
+npm's, not this package's — a consumer that is not also this repository never
+meets it.
+
+### 2026-08-19 — The GitHub delivery surface carries no CLI flags, and the limitation is stated rather than fixed here
+
+Context: `/reconcile` compared the delivery surface against `10-design.md`
+§ _Control flow_, which says the composite action and reusable workflow "carry
+that into Pages". They do, but neither forwards a CLI flag, so `--base-path`
+cannot reach a build run through either. A legacy generic site deployed that way
+onto a GitHub Pages project subpath serves unstyled with broken navigation — the
+failure `.github/workflows/pages.yml`'s own header comment describes at length,
+and the one **C29** names for the JSON generic form. Nothing recorded it, because
+this repository deploys by invoking the CLI directly (2026-08-18 below) and so
+never exercises the surface. `action.yml`'s default `package-version` and the
+action SHA `deploy-pages.yml` pins have both stayed at the initial release.
+Chosen: state the limitation in `20-contract.md` § _GitHub delivery_, as a
+limitation with no id — nothing checks it, and an id implies something to check —
+and file the fix rather than writing it here. Threading a base path through a
+composite action and a reusable workflow adds an input to a published surface,
+which is a contract amendment and a slice, not a reconciliation's to invent.
+Rejected: **staging it for `/fix` with no contract change** — cheaper, but it
+leaves the contract silent about a failure that is already silent in production,
+which is how the JSON-generic half of this went unrecorded until `/contract`
+found it. **Treating it as a consumer-side concern**, on the grounds that the
+2026-08-18 entry knowingly declined to use `deploy-pages.yml` here — declining to
+_use_ a surface is not declining to _support_ it, and `package.json` publishes
+both files.
+Reversibility: cheap. Reversing means deleting one paragraph and one `## Open`
+item; no code has been written against it.
+
+### 2026-08-19 — Containment's owner is two functions, and the two lexical helpers stay exported
+
+Context: `/reconcile` compared the tree against the containment decision earlier
+the same day. That entry specifies one `assertWithin` resolving both sides
+through `realpath`; UI11 landed three call sites reaching two functions, and the
+contract still described one. The reason is a cost the decision did not
+anticipate: `src/staticServer.ts` checks once per request and
+`src/adapter.ts` `readStyles` once per declared stylesheet, so a single-function
+owner re-resolves the same invariant root on every call. The entry had flagged
+only the sync-versus-async cost. `src/paths.ts` also still exports `resolveFrom`,
+which no module, test or script calls, and `isWithin`, which nothing outside the
+module calls — both left in place by UI11's stated _Out of scope_, with nothing
+recording why.
+Chosen: the owner is `assertWithin` and `assertWithinResolved`, which differ only
+in whether the caller has already resolved the parent and are the same check
+either way; `assertWithinOrThrow` wraps a failure in the calling module's own
+words, keeping the original as `cause`, so a consumer reads about the stylesheet
+it declared rather than about a path comparison. `resolveFrom` and `isWithin`
+stay exported and are named in the contract as reaching no other module.
+`isWithin` in particular is kept and annotated rather than hidden: it is the
+lexical comparison both assert functions are built on, it resolves no symlink,
+and the annotation is what stops the next author reaching for it as though it
+were the containment check — which is the mistake **C33** exists to prevent.
+Rejected: **one function, resolving the parent on every call** — the shape the
+containment decision assumed, rejected because it puts a `realpath` in the
+per-request path of the static server to save one parameter. **Deleting
+`resolveFrom` and un-exporting `isWithin`** — the smallest surface, and it would
+make that one hazard structural rather than instructional; rejected for now
+because it contradicts UI11's stated scope and buys a narrowing no caller is
+asking for, but it is the cheap move if `paths` is ever touched again.
+Reversibility: cheap in both directions. Merging the two assert functions is a
+mechanical change at three call sites; deleting the two helpers is a deletion and
+a contract row.
+
+### 2026-08-19 — `--base-path` is a deployment flag both generic forms honour
+
+Context: `/contract` verified **C29** against the tree and found the invariant
+holds for one generic form only. `--base-path` was added by the fix for #49 so a
+generic site deployed under a GitHub Pages project subpath addresses its own
+documents; `src/generic.ts` `buildGenericData` composes the options it writes
+from the JSON model alone and sets no base path, and `src/cli.ts` hands it no
+flags, so a JSON-generic site emits root-absolute links whatever the flag says.
+Nothing recorded the omission as deliberate — the flag appears in no prior entry,
+no slice, and not in `README.md`. This entry also supplies the record `C29`
+itself never had: the invariant entered `20-contract.md` describing shipped
+behaviour rather than a decision, so no alternatives were on file for it.
+Chosen: the code is the wrong side, and **C29** keeps its unqualified scope with
+a _decided, not yet in the tree_ marker naming `buildGenericData` as the gap —
+the same treatment **C10**, **C12**, **C28** and **C33** already carry. Breaking
+under a project subpath is a property of the deployment and not of the input form
+that produced the site, so the two generic forms cannot correctly differ here.
+The base path stays a CLI flag and does not become a field on the JSON model:
+one model deployed at a domain root and under a project subpath needs two
+prefixes and is one document, so a model-level field would have to be rewritten
+per deployment target by whoever publishes it.
+Rejected: **narrowing C29 to the legacy README/CHANGELOG form** and recording
+that a JSON-generic site cannot deploy under a project subpath — cheaper, and it
+makes the document true today, but it accepts the silent failure this design
+otherwise refuses: such a site builds green, `check` passes, and it serves with
+broken navigation and no stylesheet only once deployed. **Reading the gap as
+covered by C27** — both forms do converge on one `documentHtml`, so it was
+tempting to treat the markup convergence as covering the hrefs too; rejected
+because the convergence is on the writer and the drift is in what each caller
+computes to feed it, which is the distinction the amended C29 now states.
+Reversibility: cheap. Reversing means deleting one marker from **C29** and
+recording the limitation instead; no code has been written against it yet.
+
+### 2026-08-19 — `dev` resolves input mode through the ladder `build` owns, then branches by family
+
+Context: `/design` found `dev` and `build` disagreeing about which mode a site
+is in. Where a source map and a plain adapter module are both present, `build`
+selects the root JSON model and `dev` never reads the map at all — it finds the
+adapter file and serves it. The precedence is stated over input resolution
+generally in `20-contract.md`, `README.md` and the documentation site, so the
+same repository serves one site locally and ships another, and nothing says so.
+Chosen: the code is the wrong side. `dev` consults the same ladder, so the
+precedence is one rule rather than one rule with a command-shaped hole. The
+ladder decides _which site_; the site's family then decides _which server_ — an
+adapter-family site, however it was selected, is served by the Vite dev server,
+and a generic-family site is built and served statically. This is what keeps the
+fix from being a regression: the naive version sends every source-map site to
+build-and-serve, which would take the Vite dev server away from exactly the
+consumer whose combination this entry is about.
+Rejected: **reading `dev`'s behaviour as a deliberate preference for a local
+adapter over a published model**, and writing it into the contract as a stated
+exception — defensible, and cheaper today, but it splits four commands two-to-two
+on the same repository and makes the precedence something every reader has to
+learn twice. **Filing it and deciding later** — the false statement sits in the
+contract, the README and the published documentation meanwhile, and the answer
+was not in doubt once the divergence was named. **The uniform fix, sending any
+source-map site to build-and-serve** — most consistent with `build` and the
+smallest change, rejected because it silently withdraws HMR and per-request
+reload from the one combination being repaired.
+Reversibility: moderate. Aligning `dev` with the ladder is a behaviour change to
+a shipped command in the direction the documents already promise, so reversing
+it means contradicting them again.
+
+### 2026-08-19 — `dev` emits the runtime source map where it has prefetched, and refuses to start on an unreachable source
+
+Context: issue #39, and the half of the 2026-08-19 dev-stylesheets entry that was
+filed rather than answered. That entry scoped `#szd-json-sources` to built output
+because a faithful map is the _prefetched_ map, whose build-time entries carry
+resolved payloads inline, and no prefetch had run under `dev`. Two things have
+changed since. `dev` now resolves a data-backed adapter's sources at startup, so
+on that path a prefetch has run; and the prefetched map's build entries are
+inline values, so it depends on no scratch directory and survives the temporary
+directory's removal. `resolveDataBackedConfig` discards it anyway, and the source
+comment attributes that to the directory being gone — a reason that is not the
+operative one.
+Chosen: emit the map wherever `dev` has prefetched, so a consumer entry finds the
+same element with the same shape locally and in production. A declared source
+that is unreachable at startup ends the command rather than starting the server
+without it, which keeps one failure rule across the package.
+Rejected: **starting degraded on an unreachable source**, warning and serving
+without it — it would make `dev` the only path in this package that continues
+past a failed declared source, inverting the silence rule the whole
+input-resolution design rests on, and the page developed against would not be the
+page that ships. **Keeping the element out of `dev` and documenting the
+limitation** — the cheapest edit, and it leaves the divergence issue #39 was filed
+about in place; it also still needs a documentation change, because the reason
+currently given for the limitation stopped being true when `dev` acquired the
+prefetch.
+Reversibility: cheap for the emission — one argument at one call site, the same
+change the 2026-08-15 composed-runtime-sources entry made on the build path.
+Expensive for the refusal, once a consumer's workflow depends on `dev` starting
+offline.
+
+### 2026-08-19 — Filesystem containment is centralised in `src/paths.ts` rather than deleted
+
+Context: `/design` found `src/paths.ts` imported by nothing — no source module,
+no test — while three live modules each implement their own containment check,
+and not the same check: one rejects an absolute or exactly-`..` relative path,
+one compares against a resolved boundary, one tests only for a leading
+traversal. `assertWithin` is the only implementation that resolves symlinks
+before comparing, and it never runs. `20-contract.md` lists the module in its
+cross-module surface table with a constraint about that symlink resolution,
+which is therefore a promise about a caller that does not exist.
+Chosen: it is the intended owner and was never wired up. The three live checks
+route through it. That the three disagree with each other is the argument
+against leaving them as three — an invariant implemented once per caller is one
+that holds wherever someone remembered it, which is the shape `AGENTS.md`
+warns about under _Single ownership_.
+Rejected: **deleting the module and its contract row** — the cheaper and safer
+move, since it narrows nothing on a shipped path; rejected because containment
+then stays implemented three inconsistent ways with no symlink resolution
+anywhere, and the next author reaching for a fourth check has no owner to reach
+for. **Filing it and correcting only the false contract row** — it fixes the
+document and leaves the defect, and the row is not the part that matters.
+Reversibility: expensive in one direction. Routing through `assertWithin` is a
+narrowing: a symlinked stylesheet or asset resolving outside the root builds
+today and would stop, so withdrawing the narrowing later is fine but the
+narrowing itself needs a release that says so. `assertWithin` is also async
+where two of the three call sites are currently synchronous.
+
+### 2026-08-19 — The reusable Pages workflow owns its permissions and environment
+
+Context: `/contract` compared `AGENTS.md` § _Project identity_ against the tree
+and found the line "callers provide permissions, triggers, concurrency, and
+environments" false of two of its four items. `.github/workflows/deploy-pages.yml`
+declares neither a trigger nor concurrency, so those halves hold; its `deploy`
+job declares both `permissions` and `environment: github-pages`. The environment
+half is not a choice the workflow made — `workflow_call` exposes only `inputs`
+and `secrets`, so no caller has a mechanism to supply a called job's environment,
+and `actions/deploy-pages` requires one.
+
+Chosen: narrow the identity line to triggers and concurrency, and state that the
+deploy job's permissions and environment are the workflow's own, with the reason.
+The document was the side that was wrong.
+
+Rejected: dropping `permissions` from the called job so it inherits the caller's
+— it only closes half the gap, since `environment` cannot move regardless, and it
+breaks every existing caller that does not already declare `pages: write` and
+`id-token: write`. Rejected: leaving both and filing an issue — the misleading
+line sits in the binding agent contract meanwhile, and the answer was not in
+doubt. Rejected: reading "callers provide" as policy-in-spirit — an identity
+statement that cannot be checked against the tree is the kind that rots.
+
+Reversibility: cheap — one paragraph in `AGENTS.md`.
+
+### 2026-08-19 — The dev server owes the built document's stylesheet links, but not its source map
+
+Context: `/reconcile` found two contract statements true of `build` and false of
+the adapter dev server. Site-wide `styles` are stated over "every custom-adapter
+route, entry and body alike"; `szd-json-sources` over "every entry route with
+`dataSourceIds`". The dev middleware passed neither to the document generator, so
+one config produced a styled page with a source map under `build` and an
+unstyled page with none under `dev`. Both had been missed across UI5, UI7 and
+UI8 — UI8.3 names site-wide stylesheet links explicitly and still only checked
+built output.
+Chosen: fix the stylesheets, scope the source map. The two look symmetrical and
+are not. A stylesheet is a file the package has already read into memory and
+already contained, so the dev server answers the emitted href from those bytes —
+no sandbox change, no new field, no resolution step. The emitted source map is
+the _prefetched_ map, whose build-time entries carry resolved payloads inline
+rather than the declared path or URL, so a faithful one cannot exist before a
+build has run; emitting the public map instead would hand a consumer's loader a
+different shape than production does, which is worse than emitting nothing.
+Rejected: **scoping both to built output** — consistent on the page and worse in
+the tree, since it leaves a consumer's dev pages unstyled for no reason beyond
+symmetry with a limitation that does not apply to them. **Fixing both** — a
+faithful dev `szd-json-sources` means `dev` acquiring a prefetch step, and so a
+decision about whether `dev` resolves declared sources at all; that is `/design`'s
+question, not a reconciliation's, and it is filed under `## Open` rather than
+answered here. **Serving the stylesheet through Vite by widening `fs.allow`** —
+it would reopen the `fs.allow`-stays-package-owned entry below to serve a file
+the package is already holding.
+Reversibility: cheap both ways. The dev styles are one call site; the scoping is
+one paragraph over a property no consumer can have depended on, since it has
+never been true.
+
+### 2026-08-19 — `dev` resolves a data-backed adapter once, at startup
+
+Context: `/reconcile` found that `dev` could not serve a `defineLandingPageData`
+site at all. `devAdapter` loads the adapter through `loadAdapter`, which refuses a
+data-backed export with "declares build-time data sources, which need a JSON
+source map" — while the map sat beside it and `build` used it successfully. This
+is the same defect shape as the 2026-08-15 composed-runtime-sources entry: a
+message asserting an absence that is not there.
+Chosen: `dev` resolves the declared sources once before starting the server and
+hands `devAdapter` the composed configuration to hold. The absent-source-map
+error is kept, moved to where it is actually true — no map present — so the
+message and the condition finally agree.
+Rejected: **resolving per request, as the middleware already reloads a plain
+adapter's module** — it would refetch every declared source on every navigation,
+including remote ones, turning a page reload into network traffic proportional to
+the site's data. **Leaving `dev` unsupported and narrowing the design to say so**
+— it withdraws nothing a consumer could want less, and still needs a code change
+to stop the message claiming something false, so it is not the cheaper option it
+looks like.
+Reversibility: cheap. One optional parameter on an internal function and one
+branch in the CLI.
+Known cost, retained: a data-backed adapter's `dev` does not hot-reload its
+configuration, because reloading means re-resolving. Editing one needs a restart,
+the same trade generic `dev` already makes.
+
+### 2026-08-19 — `preview` forwards input flags and suppresses only the mode flags
+
+Context: the contract said `preview` "honours `--out-dir` and `--port` and no
+other flag". Verified false: on a generic site every input flag reaches the build
+it runs, so `preview --title X` serves a site titled X. The narrower gloss in the
+same sentence — that `--adapter` and `--source-map` are read past — is what the
+code holds.
+Chosen: correct the contract to the code. `preview` builds before serving, so it
+must read the flags that describe _what to build_; suppressing them would make
+`preview` and `build` given identical flags produce different sites, which is the
+disagree-about-mode hazard the ladder entry above exists to close, arriving by the
+other door. Only the two flags that select which _mode_ a site is in stay
+suppressed, because mode is `build`'s to resolve once.
+Rejected: **suppressing every flag but `--out-dir` and `--port`** — it makes the
+sentence true by making the command less useful and less consistent with `build`,
+and a consumer inspecting a site built with flags could no longer inspect that
+site.
+Reversibility: cheap. The sentence describes behaviour that has shipped since
+`preview` did.
+
+### 2026-08-19 — The two plugin guards added as UI8 hardening are stated invariants
+
+Context: `/reconcile` found `buildOutDirGuardPlugin` and the `server.fs.strict`
+checks implemented, documented in `README.md`, and absent from both
+`20-contract.md` and UI8's acceptance criteria. They arrived in a hardening commit
+closing bypasses found in review; the commit message is the only place the
+reasoning existed outside a source comment.
+Chosen: state both in the contract's plugin section, with the reason each is an
+invariant rather than a check. `fs.strict` is inseparable from `fs.allow` — it is
+what gives the list force — so refusing one and permitting the other would be a
+sandbox with a documented way out. `build.outDir` is trusted unconditionally by
+the step that lifts generated documents into place, so a redirected build is not a
+different output location but an unpredictable one.
+Rejected: **leaving them to `README.md`** — the contract owns invariants and the
+README owns CLI input and error behaviour; an invariant living only in the README
+is a promise the document that governs promises does not make. **Enforcing only
+at the `config` hook** — Vite never freezes the resolved configuration, so a
+plugin can mutate the running server from `configureServer` after every config
+hook has passed, which is the bypass the hardening commit closed.
+Reversibility: cheap for the wording. Withdrawing either guard is not: a consumer
+whose plugin works today does so because the guard permits it.
+
+### 2026-08-19 — `preview` builds before serving
+
+Context: issue #5's own "one real decision," left open when the rest of
+`preview`'s contract was drafted. Not building leaves an existing `outDir`
+alone and makes the served tree unambiguously whatever produced it; building
+first removes the absent-`outDir` error and always shows the current source,
+at the cost that `build` clears `outDir` before writing, so a build failing
+after the clear leaves `preview` with nothing to serve.
+Chosen: `preview` always builds first, then serves. No `--no-build` flag, no
+absent-`outDir` error path.
+Rejected: **serve-only, requiring an existing build** — avoids the clear-then-
+fail hazard entirely, and was the recommendation when this fork was raised, but
+was not the owner's choice: shown the tradeoff, the owner chose the command
+that always reflects current source over the one that cannot destroy an
+existing build.
+Reversibility: expensive once consumers depend on `preview` always building —
+withdrawing that and requiring a separate `build` step first is a breaking
+behaviour change to a shipped command.
+
+### 2026-08-19 — Consumer Vite plugins reach both `build` and `dev`
+
+Context: issue #4's own flagged design question, left open when the rest of
+the plugin contract was drafted: whether `LandingPageConfig` plugins apply to
+`build`, `dev`, or both, and what that implies for the package's output
+guarantees.
+Chosen: one field, `plugins?: readonly PluginOption[]`, spread into both Vite
+calls identically. Declaring plugins affects the shipped artifact, not only
+the dev experience; the static-head, route-path and output-layout guarantees
+hold only where no plugins are declared.
+Rejected: **dev-only (`devPlugins`)** — keeps the built-output guarantees
+unconditional regardless of whether plugins are declared, and was the
+recommendation when this fork was raised, but was not the owner's choice: a
+consumer needing a build-time transform (an SVG-as-component or i18n plugin,
+not only Fast Refresh) would have had no route without reopening this
+decision. **Two separate lists (`buildPlugins`/`devPlugins`)** — no capability
+loss, most explicit at the call site, but the widest surface to maintain and
+later withdraw, for a need issue #4 demonstrated only for `dev`.
+Reversibility: expensive. Once a consumer's `build` depends on a declared
+plugin, narrowing the field to dev-only is a breaking change.
+
+### 2026-08-19 — `preview` holds no ladder of its own and shares one static server with `dev`
+
+Context: issue #5. The static file server exists but only on `dev`'s generic
+branch, so an adapter consumer cannot look at its built output without
+reinstating the direct `vite` dependency the package exists to remove. Two
+shapes were available: a `preview` that resolves input mode the way `build`
+does and serves accordingly, or one that treats the built tree as its whole
+input.
+Chosen: `preview` holds no precedence ladder of its own. `--out-dir` and
+`--port` are the only flags it honours; `--adapter` and `--source-map` are read
+past, not forwarded. One static server implementation serves both `preview` and
+generic `dev`.
+Rejected: **resolving input mode in `preview`** — it would duplicate `build`'s
+precedence ladder in a command that serves files, and give the two a way to
+disagree about which mode a site is in while one of them is being used to check
+the other's output. **A second server implementation for adapter mode** — the
+duplication issue #5 explicitly rules out, and the copies would drift on the
+three things that decide whether the built site actually runs: resolution,
+containment and content type.
+Reversibility: cheap for the server sharing. Adding a second, `preview`-owned
+ladder later would be a behaviour change to a shipped command, so that
+direction is not.
+
+Amended 2026-08-19, same day. As first written, `Chosen` read "`preview` reads
+no adapter module and no source map. `outDir` is the input" and `Rejected`
+ruled out resolving input mode at all — which the build-before-serving decision
+above, taken later the same day, contradicts outright, since building requires
+resolving mode. Build-first is the one in force, and the wording here is
+narrowed to what this decision was actually protecting, which still holds: mode
+is resolved once, in `build`. `preview` calls `build` rather than reimplementing
+its ladder, so the duplication and the disagree-about-mode hazard named under
+`Rejected` are both closed — more firmly than a serve-only `preview` would have
+closed them. Read `Rejected` as ruling out a _second_ ladder, not the one
+`build` already owns.
+
+### 2026-08-19 — The shared static server normalises directory URLs, contains resolution to `outDir`, and sets `Content-Type`
+
+Context: writing `preview`'s contract against the existing server surfaced three
+properties it does not have. It appends `index.html` only when the URL already
+ends in `/`, so `/roadmap` 404s while `/roadmap/` works — the adapter's own dev
+middleware normalises exactly this case, so the three servers disagree. It joins
+the raw `request.url` to `outDir`, so a query string reaches the filename and a
+`..` segment resolves outside the directory. It sets no `Content-Type` at all,
+which a built adapter route does not survive: a module script served without a
+JavaScript type does not execute.
+Chosen: state all three as invariants of the shared server — pathname only,
+percent-decoded once, directory URLs resolving to `index.html`, anything
+resolving outside `outDir` answered as a 404 with no filesystem detail, and a
+`Content-Type` on every 200. Issue #5's non-goal forbids changing `dev`'s
+behaviour, and sharing the server does change it: a request that 404s today may
+answer 200, and responses gain a header. Each of those changes is on a path that
+is currently a defect rather than a behaviour anyone can be relying on.
+Rejected: **keeping the server exactly as it is and reading the non-goal
+literally** — it ships a `preview` that cannot serve the adapter output it was
+written for, since the module scripts would not execute. **Fixing containment
+and content type but not directory normalisation** — it leaves `preview`
+disagreeing with the adapter dev server about the same URL, which is the
+divergence sharing the implementation is meant to prevent.
+Reversibility: cheap. Each is a property of one server function, and none is a
+declared public field.
+
+### 2026-08-19 — Consumer Vite plugins are a TypeScript-adapter surface only, never a JSON-model field
+
+Context: issue #4. The 2026-08-15 `styles` entry established the opposite
+default — a capability carried on `LandingPageConfig` should also be carried on
+`AdapterLandingPageData` so a TypeScript adapter, a JSON model and a
+`defineLandingPageData` site express it identically. Plugins cannot follow that
+rule.
+Chosen: the plugin declaration lives on `LandingPageConfig` alone. A plugin is
+code; the JSON model is data the package may fetch over HTTP; a fetched document
+that could name code the builder then executes is a different class of surface
+from one that names a CSS path. A `defineLandingPageData` site returns a
+`LandingPageConfig` and so declares plugins like any other adapter, which is why
+the exclusion costs no capability.
+Rejected: **a plugin-specifier field on `AdapterLandingPageData`** (a module
+path resolved at build time) — it is the parity the `styles` entry would
+predict, and it turns the JSON model into remote code selection. **Widening the
+model later if a consumer asks** — recording the exclusion now is what stops the
+question being reopened as an oversight; it is a stated boundary, not a gap.
+Reversibility: cheap in the chosen direction — nothing is added to the model.
+Expensive to reverse: adding a code-naming field to a fetched model is a
+security decision, not an additive one.
+
+### 2026-08-19 — `fs.allow` stays package-owned, and a plugin cannot widen it
+
+Context: issue #4's third acceptance criterion. Vite merges plugin-returned
+configuration into the inline configuration, and `server.fs.allow` is an array,
+so a consumer plugin returning one would extend the sandbox the adapter
+narrowed — implicitly, and invisibly to the `allow` field that exists to make
+that widening reviewable.
+Chosen: the resolved `fs.allow` is exactly the site root plus the resolved
+`allow` entries. Plugin-supplied additions do not take effect and end the run
+naming the entries refused.
+Rejected: **silently re-narrowing after plugin resolution** — the consumer's
+dev server then fails to read a file its plugin asked for, with nothing saying
+why; a refusal that names the entries points straight at `allow`. **Letting
+plugins widen it, since dev is not the shipped artifact** — the narrowing exists
+because a dev server serves the filesystem to a browser, and that argument does
+not weaken because the output is not published.
+Reversibility: cheap. It is a check at one call site with no declared field
+attached.
+
+### 2026-08-15 — `LandingPageMetadata.repositoryUrl` is withdrawn
+
+Context: `/contract` found a third public field read by nothing. It is typed on
+route metadata and validated by the JSON model, and no code consumes it; the
+generic shell's repository link comes from `GenericLandingPageData`'s separate
+field of the same name, and the custom-adapter head never reads route metadata's
+copy. The contract's static-head section never listed it, so it is unspecified
+as well as unused.
+Chosen: remove the field and its validation, as `hydrate` was removed the same
+day and for the same reason — a validated no-op invites a consumer to set it and
+believe the document changed. The contract needs no amendment, having never
+claimed it.
+Rejected: **specifying and emitting it** as a per-route repository link — the
+head has no established `rel` for one, and the generic shell already expresses
+the idea as a nav link, so the two forms would diverge on a field neither
+consumer asked for. **Recording it as reserved-with-no-effect** — the cheapest
+edit today, and it leaves a public interface with no specification, which the
+hard rules forbid and the next reconciliation finds again.
+Reversibility: cheap. Re-adding an optional field is additive during `0.x`.
+
+### 2026-08-15 — `styles` is specified as ordered site-wide links, and a missing file fails the build
+
+Context: the entry below chose to specify `LandingPageConfig.styles` rather than
+withdraw it, and left the amendment to `/contract`. Writing it forced three
+questions that entry did not answer: whether the JSON `kind: "adapter"` model
+carries the field, where the links sit relative to a body route's `stylesheet`,
+and what becomes of a declared path that cannot be read.
+Chosen: carry `styles` on `AdapterLandingPageData` too, so a TypeScript adapter,
+a JSON model and a `defineLandingPageData` site express it identically; emit the
+links in declaration order, ahead of the `<style>` the head already places last,
+so a route's own CSS overrides site-wide rules; and end the build on an
+unreadable path.
+Rejected: **the TypeScript config only** — it leaves a JSON-backed site with no
+site-wide stylesheet at all, a capability gap that has to be explained rather
+than read. **Emitting the links after a route's `stylesheet`** — a site-wide
+file would silently override the route that declared its own CSS, inverting the
+specificity a consumer expects from the narrower declaration. **Dropping an
+unreadable path with a warning** — a site that builds and serves unstyled is the
+silent failure the declared-source rules already reject, and that argument does
+not weaken because the value is CSS rather than content.
+Reversibility: expensive, as the entry it completes already recorded.
+Specifying a public field is additive during `0.x`; withdrawing it after a
+consumer adopts it needs a breaking release.
+
+### 2026-08-15 — The document's invariants are enforced where the document is written
+
+Context: `/reconcile` found two halves of one gap. The contract states that every
+value the package interpolates into a document it owns is HTML-escaped and names
+exactly two verbatim exceptions, but a route's `entry` reached the module-script
+`src` unescaped beside attributes that were escaped — and `entry` is reachable
+from a JSON model the contract permits to arrive over HTTP. Separately,
+duplicate route paths were rejected by `defineLandingPage` and by the JSON model
+validator but not by the function that writes the entry documents, so an adapter
+object that reached the writer by another route silently produced one document
+where two were declared.
+Chosen: escape `entry` at its interpolation, and check path uniqueness in the
+writer beside the per-route path check already there. Both are idempotent for
+callers that already validate, so no valid consumer's output changes.
+Rejected: **validating `entry` against a path grammar as well** — it is a
+narrowing of a shipped public surface, and escaping already closes the document
+hole the contract is stated over; a grammar can be added later as its own
+narrowing release if a second reason appears. **Naming `entry` as a third
+verbatim value in the contract** — unlike `body` and `stylesheet` it is validated
+by nothing else, so the contract would be documenting an injection surface into a
+document whose whole promise is that it loads only what the package put there.
+**Leaving uniqueness to the two entry points the contract names** — that is the
+same asymmetry the 2026-08-13 route-path entry already ruled against, and a
+silently wrong build is the worst failure this package can produce.
+Reversibility: cheap. Both are single-expression changes with no contract effect.
+
+### 2026-08-15 — A composed adapter's entry routes may carry runtime sources
+
+Context: the contract promises that every entry route declaring `dataSourceIds`
+gets its filtered public map emitted inertly. The path that composes routes from
+build-time data did not pass the resolved runtime map to the document writer, so
+such a route failed with a message claiming no source map existed — while the map
+was open in the calling function. No test or document covered the combination.
+Chosen: pass the resolved runtime map through, exactly as the root-model path
+already does. One emission mechanism serves both adapter forms, and the contract
+becomes true rather than aspirational.
+Rejected: **narrowing the contract so a composed route may not declare
+`dataSourceIds`** — defensible, since a composed site already holds its data at
+build time, but it withdraws a shipped surface and still needs a code change to
+make the error message honest, so it is not the cheaper option it appears to be.
+**Filing it and deciding later** — the contract stays false in the meantime and
+the misleading message stays in front of the next consumer to try it.
+Reversibility: cheap. One argument at one call site.
+
+### 2026-08-15 — `styles` becomes site-wide stylesheet links rather than being withdrawn
+
+Context: `LandingPageConfig.styles` has been a public field since the first
+commit, consumed by nothing, absent from the contract and from this log. It is a
+public interface with no specification, which the hard rules forbid.
+Chosen: specify it as repository-relative CSS paths copied to the output and
+emitted as `<link rel="stylesheet">` in every route's head, entry and body alike.
+It is per-site rather than per-route, so it does not reopen the 2026-08-05
+decision, which rejected a second _per-route_ mechanism competing with an entry
+route's module graph. The contract amendment belongs to `/contract`; the
+implementation follows it.
+Rejected: **removing the field** — the cheaper and safer move, and the one
+recommended, but it forgoes a genuinely absent capability: a site-wide
+stylesheet has no expression today outside the generic shell's theme file.
+**Inline CSS strings instead of paths** — it would mirror a body route's
+`stylesheet` and keep CSS a string in the JSON model, but it forces every
+site-wide rule through the config file and forgoes the bundler's asset handling.
+**Body routes only** — the most conservative reading, rejected because a
+site-wide field applying to only some routes is a contract that has to be
+explained rather than read.
+Reversibility: expensive. Specifying and implementing a public field is additive
+during `0.x`, but withdrawing it after a consumer adopts it needs a breaking
+release — which removing it now would not have.
+
+### 2026-08-15 — `hydrate` is withdrawn rather than implemented
+
+Context: `LandingPageEntryRoute.hydrate` has been typed and validated since the
+first commit and read by nothing, while the README told consumers it was
+available for a server-rendered mount. A documented no-op is worse than an
+absent field: a consumer sets it and believes the page hydrates.
+Chosen: remove the field, its validation, and the README claim.
+Rejected: **specifying and implementing it** — the package has no prerendering
+step to produce the markup a hydrating mount would attach to, so this is a design
+question rather than a fix and would belong to `/design`, not to the correction
+of a false claim. **Keeping the field and correcting only the README** — it
+leaves a public field whose sole effect is to be validated, which is the shape
+this entry exists to remove.
+Reversibility: cheap. Re-adding an optional field is additive; the README claim
+is the part that had to go either way.
+
 ### 2026-08-13 — The adapter seam accepts build-time data, typed by the consumer
 
 Context: the entry earlier the same day rejected build-time data injection on the
@@ -232,3 +864,76 @@ that were nowhere written down; replacing the target's content wholesale with
 the kit's `AGENTS.md` — the project-identity paragraph and its two house
 rules are real, repository-specific content with no kit equivalent.
 Reversibility: cheap — a documentation file, not a public interface.
+
+### 2026-08-18 — This repository dogfoods its own package as a caller; Docusaurus added to `docs/`
+
+Context: the repository had no self-hosted landing page or documentation
+site of its own, unlike `SubZeroDev.GameEngine`, which uses this package as a
+consumer for both. Setting one up needed a documentation-site generator for
+`docs/` (fed by `/make-human-docs`'s `guide.md`, previously written to the
+repository root with nowhere to be hosted) and a way to build/deploy this
+repository's own `README.md`-driven landing page without changing the
+package's public interface.
+Chosen: (1) the package's own generic README/CHANGELOG mode, invoked via
+`npx` against the last-published version, exactly as any external consumer
+would — this repository is a CLI tool with no product UI to justify a custom
+`site/landing.config.ts` adapter, unlike GameEngine. (2) `docs/` as a
+standalone Docusaurus project with its own `package.json`
+(`@docusaurus/core`, `@docusaurus/preset-classic`), built and deployed by a
+new caller-owned workflow (`.github/workflows/pages.yml`) that merges the
+docs build with the landing build via the package's existing `merge` CLI
+command. (3) `CHANGELOG.md` is generated fresh on every deploy by the
+package's own `generate-changelog` command and never committed.
+Rejected: **GameEngine's docs pattern verbatim** — a private base container
+image (`ghcr.io/the-running-dev/docs-template`) with Docusaurus and
+PowerShell scripts baked in, and a `docs-deploy.yml` built around that image.
+This repository has no PowerShell or Docker tooling today; adopting that
+image would be a materially larger infrastructure decision (standing up or
+depending on a shared private image) than "add a docs generator," and is out
+of scope for this task. **Reusing `.github/workflows/deploy-pages.yml`
+as-is** — its `build`/`merge` steps run inside a fresh job checkout that
+never sees a `CHANGELOG.md` generated in a prior job, so it cannot be used
+without either committing a stale changelog or modifying the reusable
+workflow's contract; a new single-job caller workflow avoids both.
+**Hand-authoring `CHANGELOG.md`** instead of generating it — duplicates what
+`git log` already holds and goes stale, which is the exact failure the
+package's own `generate-changelog` command exists to prevent.
+Reversibility: moderate. The Docusaurus dependency and the new workflow are
+additive and repo-local; removing them is cheap. The `docs/` directory now
+means something different (a Docusaurus project, not two loose reference
+files) — reverting that shape change means moving files back and fixing the
+one relative link in `README.md` that changed with them.
+
+### 2026-08-20 — `pages.yml`'s repository-inference workarounds removed; `inferRepository` cleared
+
+Context: issue #61 tasked testing the two untested candidates the 2026-08-19
+entry above left open. `repositoryFromRemote`'s regex, tested against the
+exact URL form `actions/checkout@v7` produces for HTTPS (confirmed by reading
+`getFetchUrl` in that action's published `dist/index.js`:
+`${serviceUrl.origin}/${encodedOwner}/${encodedName}`, no `.git` suffix,
+`encodeURIComponent` leaves dots unescaped) — `https://github.com/The-Running-Dev/SubZeroDev.Platform.UI.LandingPage`
+— matches and returns the correct `owner/name`. The published
+`subzerodev-platform-ui-landing-page@0.5.0` tarball's `dist/git.js` is
+byte-identical to this tree's compiled `src/git.ts`. Both candidates
+`inferRepository` depends on are now verified, not merely argued from the
+regex in isolation.
+Chosen: remove `--repository` from the `generate-changelog` step and
+`--repository-url` from the `build` step in `.github/workflows/pages.yml`,
+and their explanatory comments — both steps now fall back to `inferRepository`,
+which is confirmed correct for this repository's actual CI-checked-out remote.
+Rejected: **leaving the flags in place as harmless redundancy** — the 2026-08-19
+entry was explicit that an uncorrected comment citing a cleared cause is how a
+workaround outlives its reason; with the cause now verified absent, the flags
+are dead weight the next reader would have to re-diagnose. **Reproducing the
+original CI failure directly** by dispatching `pages.yml` — rejected because
+any dispatch of this workflow performs a real Pages deployment, which is the
+same "runs the experiment in production" objection the prior entry raised
+against deleting the flags; reading `actions/checkout`'s own source for its
+exact fetch-URL construction gave an equally conclusive answer without it.
+Reversibility: cheap. Both flags and their github.repository/build-URL
+interpolation were narrowly scoped to these two steps; restoring them is a
+two-line revert if `inferRepository` regresses.
+
+## Open
+
+Staging only. Once an item becomes a GitHub issue, `/track` removes it from here.

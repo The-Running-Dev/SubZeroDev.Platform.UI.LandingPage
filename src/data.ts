@@ -34,6 +34,7 @@ export type AdapterLandingPageData = {
   kind: "adapter";
   allow?: readonly string[];
   publicDir?: string;
+  styles?: readonly string[];
   routes: readonly LandingPageDataRoute[];
 };
 
@@ -98,7 +99,6 @@ function metadata(value: unknown, label: string): LandingPageMetadata {
       "title",
       "description",
       "canonicalUrl",
-      "repositoryUrl",
       "socialImageUrl",
       "openGraph",
       "twitter",
@@ -114,7 +114,6 @@ function metadata(value: unknown, label: string): LandingPageMetadata {
     );
   for (const field of [
     "canonicalUrl",
-    "repositoryUrl",
     "socialImageUrl",
     "themeColor",
     "noScript",
@@ -180,15 +179,7 @@ function route(value: unknown, index: number): LandingPageDataRoute {
   const item = record(value, `routes[${index}]`);
   keys(
     item,
-    [
-      "path",
-      "entry",
-      "body",
-      "stylesheet",
-      "metadata",
-      "hydrate",
-      "dataSourceIds",
-    ],
+    ["path", "entry", "body", "stylesheet", "metadata", "dataSourceIds"],
     `routes[${index}]`,
   );
   const result = {
@@ -212,10 +203,6 @@ function route(value: unknown, index: number): LandingPageDataRoute {
   if (item.stylesheet !== undefined && typeof item.stylesheet !== "string")
     throw new Error(
       `LandingPageData routes[${index}].stylesheet must be a string.`,
-    );
-  if (item.hydrate !== undefined && typeof item.hydrate !== "boolean")
-    throw new Error(
-      `LandingPageData routes[${index}].hydrate must be a boolean.`,
     );
   assertRoute(result);
   if (
@@ -287,7 +274,11 @@ export function validateLandingPageData(raw: unknown): LandingPageData {
   }
   if (item.kind !== "adapter")
     throw new Error("LandingPageData kind must be 'generic' or 'adapter'.");
-  keys(item, ["version", "kind", "allow", "publicDir", "routes"], "adapter");
+  keys(
+    item,
+    ["version", "kind", "allow", "publicDir", "styles", "routes"],
+    "adapter",
+  );
   if (!Array.isArray(item.routes) || item.routes.length === 0)
     throw new Error(
       "LandingPageData adapter.routes must be a non-empty array.",
@@ -304,5 +295,8 @@ export function validateLandingPageData(raw: unknown): LandingPageData {
     ...(item.publicDir === undefined
       ? {}
       : { publicDir: string(item.publicDir, "adapter.publicDir")! }),
+    ...(item.styles === undefined
+      ? {}
+      : { styles: strings(item.styles, "adapter.styles")! }),
   };
 }

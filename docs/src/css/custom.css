@@ -1,0 +1,15 @@
+/**
+ * Prose links render with Infima's default color alone, no underline —
+ * indistinguishable from surrounding text on a quick scan. Scoped to
+ * `.markdown` (Docusaurus's class for the rendered doc body) so navbar,
+ * sidebar, and footer links are untouched.
+ */
+.markdown a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.markdown a:hover {
+  text-decoration-thickness: 2px;
+}

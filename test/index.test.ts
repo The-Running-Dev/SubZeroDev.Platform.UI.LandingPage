@@ -158,6 +158,17 @@ describe("LandingPageData", () => {
     ).toThrow("invalid segment");
   });
 
+  it("accepts an adapter model declaring site-wide styles (UI7.3)", () => {
+    expect(
+      validateLandingPageData({
+        version: 1,
+        kind: "adapter",
+        styles: ["site/base.css", "site/type.css"],
+        routes: [{ path: "/", body: "<main>Home</main>", metadata }],
+      }),
+    ).toMatchObject({ styles: ["site/base.css", "site/type.css"] });
+  });
+
   it("rejects a model that declares one route path twice", () => {
     expect(() =>
       validateLandingPageData({
@@ -172,6 +183,47 @@ describe("LandingPageData", () => {
   });
 
   it.each([
+    [
+      "a route declaring hydrate",
+      {
+        version: 1,
+        kind: "adapter",
+        routes: [
+          {
+            path: "/",
+            entry: "src/main.ts",
+            metadata,
+            hydrate: true,
+          },
+        ],
+      },
+      "unknown field 'hydrate'",
+    ],
+    [
+      "route metadata declaring repositoryUrl",
+      {
+        version: 1,
+        kind: "adapter",
+        routes: [
+          {
+            path: "/",
+            body: "<main>Home</main>",
+            metadata: { ...metadata, repositoryUrl: "https://example.test/" },
+          },
+        ],
+      },
+      "unknown field 'repositoryUrl'",
+    ],
+    [
+      "an adapter declaring plugins (UI8.7)",
+      {
+        version: 1,
+        kind: "adapter",
+        plugins: [{ name: "x" }],
+        routes: [{ path: "/", body: "<main>Home</main>", metadata }],
+      },
+      "unknown field 'plugins'",
+    ],
     [
       "an unsupported version",
       {
@@ -230,6 +282,16 @@ describe("LandingPageData", () => {
         ],
       },
       "icons[0].rel is invalid",
+    ],
+    [
+      "an adapter's styles holding a non-string",
+      {
+        version: 1,
+        kind: "adapter",
+        styles: ["site/base.css", 1],
+        routes: [{ path: "/", body: "<main>Home</main>", metadata }],
+      },
+      "adapter.styles must be an array of strings",
     ],
     [
       "a non-numeric Open Graph dimension",

@@ -17,7 +17,7 @@ export async function git(root: string, args: string[]): Promise<string> {
 }
 
 export function repositoryFromRemote(remote: string): string | undefined {
-  const match = remote.match(/(?:github\.com[:/])([^/]+\/[^/.]+)(?:\.git)?$/i);
+  const match = remote.match(/(?:github\.com[:/])([^/]+\/[^/]+?)(?:\.git)?$/i);
   return match?.[1];
 }
 

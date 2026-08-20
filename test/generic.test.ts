@@ -1,6 +1,13 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildGeneric, buildGenericData } from "../src/generic.js";
 
@@ -104,6 +111,156 @@ describe("generic build", () => {
     expect(
       await readFile(join(outDir, "changelog", "index.html"), "utf8"),
     ).toContain("First release");
+  });
+
+  it("rejects a local Markdown asset resolving outside the repository root through a symbolic link (UI11.3)", async () => {
+    const root = await fixture();
+    const outer = await mkdtemp(join(tmpdir(), "szd-generic-outer-"));
+    roots.push(outer);
+    await writeFile(join(outer, "outside.txt"), "leaked", "utf8");
+    await symlink(join(outer, "outside.txt"), join(root, "site", "linked.txt"));
+    await writeFile(
+      join(root, "README.md"),
+      "# Example\n\nA concise example project.\n\n![Linked](site/linked.txt)\n",
+      "utf8",
+    );
+    await expect(
+      buildGeneric({
+        root,
+        readme: "README.md",
+        siteReadme: "site/README.md",
+        changelog: "CHANGELOG.md",
+        css: "site/theme.css",
+        publicDir: "site/public",
+        outDir: join(root, "site", "dist"),
+      }),
+    ).rejects.toThrow("site/linked.txt");
+  });
+
+  it("rejects a local Markdown asset path beginning '../' (UI11.8)", async () => {
+    const root = await fixture();
+    const outer = await mkdtemp(join(tmpdir(), "szd-generic-outer-"));
+    roots.push(outer);
+    await writeFile(join(outer, "escape.txt"), "leaked", "utf8");
+    await writeFile(
+      join(root, "README.md"),
+      `# Example\n\nA concise example project.\n\n![Escape](${relative(
+        root,
+        join(outer, "escape.txt"),
+      ).replaceAll("\\", "/")})\n`,
+      "utf8",
+    );
+    await expect(
+      buildGeneric({
+        root,
+        readme: "README.md",
+        siteReadme: "site/README.md",
+        changelog: "CHANGELOG.md",
+        css: "site/theme.css",
+        publicDir: "site/public",
+        outDir: join(root, "site", "dist"),
+      }),
+    ).rejects.toThrow("escapes the repository root");
+  });
+
+  it("accepts a local Markdown asset reached through a symbolic link that stays inside the repository root (UI11.6)", async () => {
+    const root = await fixture();
+    await symlink(
+      join(root, "site", "mark.txt"),
+      join(root, "site", "linked.txt"),
+    );
+    await writeFile(
+      join(root, "README.md"),
+      "# Example\n\nA concise example project.\n\n![Linked](site/linked.txt)\n",
+      "utf8",
+    );
+    const outDir = join(root, "site", "dist");
+    await buildGeneric({
+      root,
+      readme: "README.md",
+      siteReadme: "site/README.md",
+      changelog: "CHANGELOG.md",
+      css: "site/theme.css",
+      publicDir: "site/public",
+      outDir,
+    });
+    expect(
+      await readFile(
+        join(outDir, "assets", "source", "site", "linked.txt"),
+        "utf8",
+      ),
+    ).toBe("asset");
+  });
+
+  it("prefixes its own self-links with basePath, for subpath deploys", async () => {
+    const root = await fixture();
+    const outDir = join(root, "site", "dist");
+    await buildGeneric({
+      root,
+      readme: "README.md",
+      siteReadme: "site/README.md",
+      changelog: "CHANGELOG.md",
+      css: "site/theme.css",
+      publicDir: "site/public",
+      outDir,
+      basePath: "SubZeroDev.Platform.UI.LandingPage",
+    });
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).toContain(
+      '<link rel="stylesheet" href="/SubZeroDev.Platform.UI.LandingPage/assets/szd-base.css">',
+    );
+    expect(home).toContain(
+      '<link rel="stylesheet" href="/SubZeroDev.Platform.UI.LandingPage/assets/theme.css">',
+    );
+    expect(home).toContain(
+      '<a class="szd-brand" href="/SubZeroDev.Platform.UI.LandingPage/">',
+    );
+    expect(home).toContain(
+      '<a href="/SubZeroDev.Platform.UI.LandingPage/changelog/"',
+    );
+  });
+
+  it("defaults basePath to root-absolute when omitted", async () => {
+    const root = await fixture();
+    const outDir = join(root, "site", "dist");
+    await buildGeneric({
+      root,
+      readme: "README.md",
+      siteReadme: "site/README.md",
+      changelog: "CHANGELOG.md",
+      css: "site/theme.css",
+      publicDir: "site/public",
+      outDir,
+    });
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).toContain(
+      '/assets/szd-base.css"><link rel="stylesheet" href="/assets/theme.css"',
+    );
+    expect(home).toContain('<a class="szd-brand" href="/">');
+  });
+
+  it("prefixes JSON-generic self-links with basePath, for subpath deploys", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-generic-json-base-"));
+    roots.push(root);
+    const outDir = join(root, "site", "dist");
+    await buildGenericData(
+      root,
+      outDir,
+      {
+        version: 1,
+        kind: "generic",
+        home: { markdown: "# JSON home\n\nA description paragraph." },
+        changelog: { markdown: "# Changelog\n\n- one" },
+      },
+      "SubZeroDev.Platform.UI.LandingPage",
+    );
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).toContain(
+      '<link rel="stylesheet" href="/SubZeroDev.Platform.UI.LandingPage/assets/szd-base.css">',
+    );
+    expect(home).toContain(
+      '<a class="szd-brand" href="/SubZeroDev.Platform.UI.LandingPage/">',
+    );
   });
 
   it("rejects README files without exactly one level-one heading", async () => {

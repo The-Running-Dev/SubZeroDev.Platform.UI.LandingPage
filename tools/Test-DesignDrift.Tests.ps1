@@ -173,6 +173,157 @@ None.
         }
     }
 
+    Context 'slice prefix' {
+
+        It 'defaults to S and finds nothing when the document uses a different prefix' {
+            $path = New-SlicesDoc -Content @'
+# Slices
+
+## Outstanding
+
+## UI1 — A slice
+
+Acceptance:
+  - UI1.1 The only criterion.
+'@
+            Mock Get-TrackerIssue { New-Tracker -Issues @(
+                New-Issue -Number 9 -Title 'UI1 — A slice' -Body '- [ ] **UI1.1** the only criterion'
+            ) }
+
+            $r = Invoke-DriftCheck -SlicesPath $path
+
+            $r.State | Should -Be 'Clean'
+            $r.SlicesCompared | Should -Be 0
+        }
+
+        It 'a matching -SlicePrefix finds the slice, matches ids, and is Clean' {
+            $path = New-SlicesDoc -Content @'
+# Slices
+
+## Outstanding
+
+## UI1 — A slice
+
+Acceptance:
+  - UI1.1 The only criterion.
+'@
+            Mock Get-TrackerIssue { New-Tracker -Issues @(
+                New-Issue -Number 9 -Title 'UI1 — A slice' -Body '- [ ] **UI1.1** the only criterion'
+            ) }
+
+            $r = Invoke-DriftCheck -SlicesPath $path -SlicePrefix 'UI'
+
+            $r.State | Should -Be 'Clean'
+            $r.SlicesCompared | Should -Be 1
+        }
+
+        It 'a matching -SlicePrefix still reports a real id mismatch as drift' {
+            $path = New-SlicesDoc -Content @'
+# Slices
+
+## Outstanding
+
+## UI1 — A slice
+
+Acceptance:
+  - UI1.1 The first criterion.
+  - UI1.2 The second criterion.
+'@
+            Mock Get-TrackerIssue { New-Tracker -Issues @(
+                New-Issue -Number 9 -Title 'UI1 — A slice' -Body '- [ ] **UI1.1** first'
+            ) }
+
+            $r = Invoke-DriftCheck -SlicesPath $path -SlicePrefix 'UI'
+
+            $r.State | Should -Be 'Drifted'
+            ($r.Findings | Where-Object Kind -eq 'InDocNotIssue').Detail | Should -Be 'UI1.2'
+        }
+
+        It 'a pin using the configured prefix resolves ancestry the same as S does' {
+            $path = New-SlicesDoc -Content @'
+# Slices
+
+## Outstanding
+
+## UI1 — A slice
+
+Acceptance:
+  - UI1.1 The only criterion.
+'@
+            Mock Get-TrackerIssue { New-Tracker -Issues @(
+                New-Issue -Number 9 -Title 'UI1 — A slice' `
+                    -Body "- [ ] **UI1.1** first`n<!-- agent:start -->`nScope and criteria: ``design/30-slices.md`` § UI1 @ ``deadbee```n<!-- agent:end -->"
+            ) }
+            Mock Test-CommitIsAncestor { 'NotAncestor' }
+
+            $r = Invoke-DriftCheck -SlicesPath $path -SlicePrefix 'UI'
+
+            ($r.Findings | Where-Object Kind -eq 'PinNotAncestor').Slice | Should -Be 'UI1'
+        }
+
+        It 'a slice nested one heading level deeper (### under ## Outstanding) is still found' {
+            # This is this repository's own design/30-slices.md shape: '## Outstanding' groups
+            # '### UI<n>' individual slices, one level deeper than the kit's '## S<n>' examples.
+            $path = New-SlicesDoc -Content @'
+# Slices
+
+## Outstanding
+
+### UI1 — A slice
+
+Acceptance:
+  - UI1.1 The first criterion.
+  - UI1.2 The second criterion.
+
+### UI2 — Another slice
+
+Acceptance:
+  - UI2.1 A criterion belonging to the next slice.
+'@
+            Mock Get-TrackerIssue { New-Tracker -Issues @(
+                New-Issue -Number 9 -Title 'UI1 — A slice' -Body "- [ ] **UI1.1** first`n- [ ] **UI1.2** second"
+                New-Issue -Number 10 -Title 'UI2 — Another slice' -Body '- [ ] **UI2.1** a criterion belonging to the next slice'
+            ) }
+
+            $r = Invoke-DriftCheck -SlicesPath $path -SlicePrefix 'UI'
+
+            $r.State | Should -Be 'Clean'
+            $r.SlicesCompared | Should -Be 2
+        }
+
+        It 'a slice heading nested under a ## Landed group is landed, not outstanding - no issue owed' {
+            # This repository's own design/30-slices.md shape: landed slices are '### UI<n>'
+            # headings under '## Landed', never the kit's landed-table rows.
+            $path = New-SlicesDoc -Content @'
+# Slices
+
+## Landed
+
+### UI1 — A slice that already shipped
+
+**Status:** complete
+
+### UI2 — Another that shipped
+
+## Outstanding
+
+### UI3 — A slice still in flight
+
+Acceptance:
+  - UI3.1 The only criterion.
+'@
+            Mock Get-TrackerIssue { New-Tracker -Issues @(
+                New-Issue -Number 9 -Title 'UI3 — A slice still in flight' -Body '- [ ] **UI3.1** the only criterion'
+            ) }
+
+            $r = Invoke-DriftCheck -SlicesPath $path -SlicePrefix 'UI'
+
+            $r.State | Should -Be 'Clean'
+            $r.SlicesCompared | Should -Be 1
+            $r.Findings.Count | Should -Be 0
+        }
+    }
+
     Context 'pin ancestry' {
 
         BeforeEach {

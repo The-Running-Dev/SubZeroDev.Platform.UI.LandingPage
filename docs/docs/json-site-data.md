@@ -1,6 +1,10 @@
+---
+sidebar_position: 4
+---
+
 # JSON-backed site data
 
-`subzerodev-platform-ui-landing-page@0.4.0` can build a site from a versioned
+`subzerodev-platform-ui-landing-page@0.5.0` can build a site from a versioned
 JSON model selected through `subzerodev-data-json@0.2.0`. This is a build-time
 input: the root site model always declares `at: build`.
 
@@ -9,7 +13,7 @@ input: the root site model always declares `at: build`.
 Install both exact versions, then add these two files.
 
 ```powershell
-npm install --save-dev subzerodev-platform-ui-landing-page@0.4.0 subzerodev-data-json@0.2.0
+npm install --save-dev subzerodev-platform-ui-landing-page@0.5.0 subzerodev-data-json@0.2.0
 ```
 
 ```yaml
@@ -125,8 +129,12 @@ when local Markdown links or images should resolve from another directory.
 ## Use JSON with an entry route
 
 An adapter model carries the same route shape as `defineLandingPage`. `entry`
-paths are relative to the directory containing `sources.public.yml`; `publicDir`
-and `allow` are relative to the repository root.
+paths are relative to the directory containing `sources.public.yml`;
+`publicDir`, `allow` and `styles` are relative to the repository root.
+
+`styles` declares CSS files that belong to the site rather than to any one
+route; each is linked in the head of every route, entry and body alike, in
+declaration order, ahead of a body route's own `stylesheet`.
 
 The entry module is yours to write — the example below names `src/main.ts`
 relative to `site/`, so create `site/src/main.ts` before building. `publicDir` is

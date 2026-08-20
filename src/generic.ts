@@ -9,6 +9,7 @@ import { unified } from "unified";
 import { baseCss } from "./baseCss.js";
 import { inferRepository } from "./git.js";
 import type { GenericLandingPageData, LandingPageMarkdown } from "./data.js";
+import { assertWithin, assertWithinOrThrow } from "./paths.js";
 
 export type GenericOptions = {
   root: string;
@@ -23,6 +24,7 @@ export type GenericOptions = {
   repositoryUrl?: string;
   canonicalUrl?: string;
   docsUrl?: string;
+  basePath?: string;
 };
 
 type MarkdownDocument = { source: string; path: string; html: string };
@@ -100,9 +102,11 @@ async function copyReferences(
     const input = resolve(sourceDir, withoutFragment);
     if (!(await exists(input)))
       throw new Error(`Missing local asset '${original}' in '${sourcePath}'.`);
+    await assertWithinOrThrow(
+      () => assertWithin(root, input, `Asset '${original}' in '${sourcePath}'`),
+      `Asset '${original}' escapes the repository root.`,
+    );
     const safeRelative = relative(root, input).replaceAll("\\", "/");
-    if (safeRelative.startsWith("../"))
-      throw new Error(`Asset '${original}' escapes the repository root.`);
     const outputRelative = `assets/source/${safeRelative}`;
     const target = join(outDir, outputRelative);
     await mkdir(dirname(target), { recursive: true });
@@ -156,6 +160,12 @@ async function readMarkdown(
   };
 }
 
+function normalizeBasePath(basePath: string | undefined): string {
+  if (!basePath) return "/";
+  const trimmed = basePath.trim().replace(/^\/*/, "/").replace(/\/*$/, "/");
+  return trimmed;
+}
+
 function documentHtml(
   title: string,
   description: string,
@@ -163,6 +173,7 @@ function documentHtml(
   options: GenericOptions,
   active: "home" | "changelog",
 ): string {
+  const base = normalizeBasePath(options.basePath);
   const canonical = options.canonicalUrl
     ? `<link rel="canonical" href="${escapeHtml(options.canonicalUrl)}${active === "changelog" ? "changelog/" : ""}">`
     : "";
@@ -175,9 +186,9 @@ function documentHtml(
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}">${canonical}
-<link rel="stylesheet" href="/assets/szd-base.css"><link rel="stylesheet" href="/assets/theme.css"></head>
+<link rel="stylesheet" href="${escapeHtml(base)}assets/szd-base.css"><link rel="stylesheet" href="${escapeHtml(base)}assets/theme.css"></head>
 <body><a class="szd-skip-link" href="#content">Skip to content</a><div class="szd-shell">
-<header class="szd-header"><a class="szd-brand" href="/">${escapeHtml(title)}</a><nav class="szd-nav" aria-label="Site"><a href="/"${active === "home" ? ' aria-current="page"' : ""}>Home</a><a href="/changelog/"${active === "changelog" ? ' aria-current="page"' : ""}>Changelog</a>${docs}${repository}</nav></header>
+<header class="szd-header"><a class="szd-brand" href="${escapeHtml(base)}">${escapeHtml(title)}</a><nav class="szd-nav" aria-label="Site"><a href="${escapeHtml(base)}"${active === "home" ? ' aria-current="page"' : ""}>Home</a><a href="${escapeHtml(base)}changelog/"${active === "changelog" ? ' aria-current="page"' : ""}>Changelog</a>${docs}${repository}</nav></header>
 <main id="content" class="szd-main"><article class="szd-article">${body}</article></main>
 <footer class="szd-footer">Built with SubZeroDev.Platform.UI.LandingPage.</footer></div></body></html>`;
 }
@@ -261,6 +272,7 @@ export async function buildGenericData(
   root: string,
   outDir: string,
   data: GenericLandingPageData,
+  basePath?: string,
 ): Promise<void> {
   await mkdir(outDir, { recursive: true });
   const home = await readMarkdown(data.home, root, outDir);
@@ -291,6 +303,7 @@ export async function buildGenericData(
       (inferred ? `https://github.com/${inferred}` : undefined),
     canonicalUrl: data.canonicalUrl,
     docsUrl: data.docsUrl,
+    basePath,
   };
   const supplemental = data.supplemental
     ? await readMarkdown(data.supplemental, root, outDir)

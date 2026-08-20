@@ -14,7 +14,9 @@ and all tokens begin `--szd-`. Every validator needs a positive and a negative
 test. Never publish an npm version without explicit authorization.
 
 The GitHub Pages workflow is reusable but deployment remains caller-owned in
-policy: callers provide permissions, triggers, concurrency, and environments.
+policy: callers provide triggers and concurrency. The deploy job's `permissions`
+and its `github-pages` environment are the workflow's own, because `workflow_call`
+exposes only `inputs` and `secrets` — a caller has no mechanism to supply either.
 
 ## Source of truth
 

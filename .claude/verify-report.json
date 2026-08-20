@@ -1,0 +1,59 @@
+{
+  "gates": [
+    {
+      "name": "npm run format:check (prettier --check .)",
+      "status": "Passed",
+      "detail": "Checking formatting...\nAll matched files use Prettier code style!"
+    },
+    {
+      "name": "npm run lint (eslint .)",
+      "status": "Passed",
+      "detail": "eslint . completed with no output and exit 0."
+    },
+    {
+      "name": "npm run typecheck (tsc --noEmit)",
+      "status": "Passed",
+      "detail": "tsc --noEmit completed with no output and exit 0."
+    },
+    {
+      "name": "npm run build (tsc -p tsconfig.json)",
+      "status": "Passed",
+      "detail": "tsc -p tsconfig.json completed with no output and exit 0; dist/cli.js chmod succeeded."
+    },
+    {
+      "name": "npm test (vitest run)",
+      "status": "Passed",
+      "detail": "Test Files 10 passed (10); Tests 112 passed (112); Duration 42.66s (transform 799ms, setup 0ms, import 3.50s, tests 91.20s)."
+    },
+    {
+      "name": "npm run pack:check (npm pack --dry-run)",
+      "status": "Passed",
+      "detail": "npm pack --dry-run built the tarball successfully: subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, package size 40.1 kB, unpacked 138.1 kB."
+    },
+    {
+      "name": "Design drift check (tools/Test-DesignDrift.ps1 -SlicePrefix UI)",
+      "status": "Passed",
+      "detail": "Slices compared: 8\nFindings: 0    Could not evaluate: 0\nNo drift."
+    },
+    {
+      "name": "PowerShell parse-check (*.ps1 under tools/)",
+      "status": "Passed",
+      "detail": "[System.Management.Automation.Language.Parser]::ParseFile against all 18 tools/*.ps1 files: Parsed 18 files; 0 failed."
+    },
+    {
+      "name": "Pester tests (Invoke-Pester -Path tools)",
+      "status": "Passed",
+      "detail": "Invoke-Pester -Path tools -Output None -PassThru: PassedCount 113, FailedCount 0, TotalCount 113."
+    },
+    {
+      "name": "git diff --check",
+      "status": "Passed",
+      "detail": "git diff --check exited 0 with no output; no whitespace errors."
+    },
+    {
+      "name": "Docusaurus docs build (docs/, npm run build)",
+      "status": "DidNotRun",
+      "reason": "Not CI-gated (no `# verification: true` flag on any step in .github/workflows/*.yml, and no such flagged step exists for this repository at all — grep for the flag returned no matches). docs/node_modules is not installed locally. This merge only carries design/20-contract.md, design/10-design.md, and the pre-existing main-branch changes to pages.yml/90-decisions.md/json-site-data.md through — none of which the docs site builds from."
+    }
+  ]
+}

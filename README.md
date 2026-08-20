@@ -7,13 +7,50 @@ Pages deployment path.
 ## Quick start
 
 ```powershell
-npm install --save-dev subzerodev-platform-ui-landing-page@0.4.1
+npm install --save-dev subzerodev-platform-ui-landing-page@0.5.0
 subzerodev-platform-ui-landing-page build
 ```
 
 The default inputs are `README.md`, `CHANGELOG.md`, optional `site/README.md`,
 optional `site/theme.css`, and optional `site/public/`. The build writes
 `site/dist/` with `/` and `/changelog/`.
+
+## Commands
+
+- `build` writes the built site to `site/dist/` (or `--out-dir`).
+- `dev` resolves the site through the same precedence `build` uses, then
+  branches on family: an adapter-family site — a custom `site/landing.config.ts`
+  or a `site/sources.public.yml` root model declaring `kind: "adapter"` — is
+  served through Vite's dev server, which transforms on request, whichever
+  selected it; a generic-family site is built once at startup and served from
+  that output, so a source edit needs a restart. A custom-adapter site composed
+  by `defineLandingPageData` resolves its declared sources once at startup too —
+  re-resolving per request would refetch every source on every navigation — so
+  editing that configuration also needs a restart, and a source that cannot be
+  resolved ends `dev` before it starts listening. Declared site-wide `styles`
+  are linked and served here as well as in the build; `#szd-json-sources` is
+  emitted here too wherever a prefetch has run, byte-identical to the build-time
+  script for the same route.
+- `preview` builds, then serves the real built output — the same tree `build`
+  writes, fingerprinted asset names and all — on `--out-dir` (default
+  `site/dist/`) and `--port` (default `4173`).
+- `check` builds into a discarded temporary directory, to verify the build
+  succeeds without writing `site/dist/`.
+- `generate-changelog` derives changelog entries from first-parent Git history,
+  newest first, inferring the repository from `origin` unless
+  `--repository owner/name` names it. A subject ending in `(#<digits>)` becomes
+  a pull-request link, and one matching `update changelog` is dropped so the
+  command's own commits never accumulate in its output. `--check` compares
+  against the existing file instead of writing it.
+- `merge` copies a built site into a docs deployment tree without touching a
+  protected path.
+
+`--base-path` (default `/`) prefixes the generic shell's self-links and
+stylesheet hrefs, for a site deployed under a project subpath. It reaches only
+the legacy README/CHANGELOG generic form today — a JSON `kind: "generic"` model
+does not receive it yet, so a JSON-backed generic site under a subpath emits
+root-absolute links regardless of the flag. It is not carried by the composite
+action or the reusable workflow, so a site deployed through those cannot set it.
 
 ## JSON site data
 
@@ -38,7 +75,7 @@ declare `dataSourceIds`; their filtered public map is emitted as inert JSON in
 `#szd-json-sources` for consumer code to parse and load. Generic and body
 routes remain static and make no runtime data request.
 
-See [JSON-backed site data](docs/json-site-data.md) for a complete generic-site
+See [JSON-backed site data](docs/docs/json-site-data.md) for a complete generic-site
 example, an entry-route runtime-data example, and the validation rules.
 
 ## Routes composed from build-time data
@@ -98,8 +135,7 @@ Both rules apply identically to a `defineLandingPage` configuration and to a
 `LandingPageData` model.
 
 An `entry` route names a module, and its document is the toolkit shell —
-`<div id="root"></div>` plus a module script — with `hydrate` available for a
-server-rendered mount. A `body` route supplies the document body itself; that
+`<div id="root"></div>` plus a module script. A `body` route supplies the document body itself; that
 markup is emitted verbatim, no script is emitted, and the built page loads
 nothing. A `body` route may also declare a `stylesheet`, which is emitted as a
 `<style>` element in the head, since `<style>` is not valid in the body.
@@ -112,6 +148,58 @@ export default defineLandingPage({
       body: "<main><h1>Composed at build time</h1></main>",
       stylesheet: "main { font: 1rem/1.5 system-ui; }",
       metadata: { title: "Home", description: "A page that loads no script." },
+    },
+  ],
+});
+```
+
+A configuration may also declare `styles`, repository-relative CSS files that
+belong to the site rather than to any one route. Each is linked in the head of
+every custom-adapter document — entry and body routes alike — in declaration
+order, ahead of a body route's own `stylesheet`, so a route's own CSS overrides
+the site-wide rules and never the reverse. No route opts out and no route adds
+one of its own.
+
+A declared stylesheet, or a local Markdown asset in a generic build, that
+resolves outside the repository root — including through a symbolic link — is
+refused, ending the build and naming the declared path rather than publishing
+the file.
+
+```ts
+export default defineLandingPage({
+  styles: ["site/base.css", "site/type.css"],
+  routes: [
+    {
+      path: "/",
+      entry: "src/main.ts",
+      metadata: { title: "Home", description: "Home page" },
+    },
+  ],
+});
+```
+
+A configuration may also declare `plugins`, Vite plugins that reach both `build`
+and `dev` from one declared list. Declaring no plugins changes nothing. Declaring
+one does: it can rewrite emitted HTML and asset URLs, so the static-head,
+route-path and output-layout guarantees above hold only for a site that declares
+none — where one is declared, its output is on the consumer. The package's own
+plugin keeps its position ahead of a consumer's; `configFile: false` holds
+unconditionally, so a plugin may not reintroduce a consumer-owned Vite
+configuration file; the production build's `outDir` stays exactly the one the
+adapter was called with; and the dev server's `server.fs.allow` stays exactly
+the site root plus the resolved `allow` entries, with `server.fs.strict`
+always on — a plugin that tries to widen either, whether by declaring it or by
+mutating the running server directly, ends the run naming what it tried to
+add, rather than taking effect.
+
+```ts
+export default defineLandingPage({
+  plugins: [react()],
+  routes: [
+    {
+      path: "/",
+      entry: "src/main.tsx",
+      metadata: { title: "Home", description: "Home page" },
     },
   ],
 });
