@@ -1,59 +1,24 @@
 {
   "gates": [
     {
-      "name": "npm run format:check (prettier --check .)",
+      "name": "npm run check",
       "status": "Passed",
-      "detail": "Checking formatting...\nAll matched files use Prettier code style!"
+      "detail": "format:check, lint, typecheck, build, test, pack:check all succeeded. Test Files 10 passed (10); Tests 112 passed (112). npm pack --dry-run produced subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, 40.1 kB packed / 138.1 kB unpacked."
     },
     {
-      "name": "npm run lint (eslint .)",
+      "name": "Pester tests (tools)",
       "status": "Passed",
-      "detail": "eslint . completed with no output and exit 0."
-    },
-    {
-      "name": "npm run typecheck (tsc --noEmit)",
-      "status": "Passed",
-      "detail": "tsc --noEmit completed with no output and exit 0."
-    },
-    {
-      "name": "npm run build (tsc -p tsconfig.json)",
-      "status": "Passed",
-      "detail": "tsc -p tsconfig.json completed with no output and exit 0; dist/cli.js chmod succeeded."
-    },
-    {
-      "name": "npm test (vitest run)",
-      "status": "Passed",
-      "detail": "Test Files 10 passed (10); Tests 112 passed (112)."
-    },
-    {
-      "name": "npm run pack:check (npm pack --dry-run)",
-      "status": "Passed",
-      "detail": "npm pack --dry-run built the tarball successfully: subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, package size 40.1 kB, unpacked 138.1 kB."
-    },
-    {
-      "name": "PowerShell parse-check (*.ps1 under tools/)",
-      "status": "Passed",
-      "detail": "[System.Management.Automation.Language.Parser]::ParseFile against all 18 tools/*.ps1 files: Parsed 18 files; 0 failed."
-    },
-    {
-      "name": "Pester tests (Invoke-Pester -Path tools)",
-      "status": "Passed",
-      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru: Tests Passed 113, Failed 0, Skipped 0. Duration 60.92s."
-    },
-    {
-      "name": "Design drift check (tools/Test-DesignDrift.ps1 -SlicePrefix UI)",
-      "status": "Passed",
-      "detail": "Slices compared: 8\nFindings: 0    Could not evaluate: 0\nNo drift."
+      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru: Tests Passed: 113, Failed: 0, Skipped: 0, Inconclusive: 0, NotRun: 0. Result: Passed across Invoke-DoneHousekeeping.Tests.ps1, Measure-Session.Tests.ps1, Sync-Kit.Tests.ps1, Test-Companion.Tests.ps1, Test-DesignDrift.Tests.ps1, Test-GatesCache.Tests.ps1, Test-VerifyReport.Tests.ps1, Test-WriteSurface.Tests.ps1, Wait-PullRequestCheck.Tests.ps1."
     },
     {
       "name": "git diff --check",
       "status": "Passed",
-      "detail": "git diff --check exited 0 with no output; no whitespace errors."
+      "detail": "No whitespace errors reported; exit code 0."
     },
     {
-      "name": "Docusaurus docs build (docs/, npm run build)",
+      "name": "CI-flagged gates (# verification: true)",
       "status": "DidNotRun",
-      "reason": "docs/node_modules is not installed locally and this PR does not touch docs/. Not CI-gated: no `# verification: true` flag exists on any step in .github/workflows/*.yml for this repository (confirmed by grep across pages.yml and deploy-pages.yml — no matches at all). This repository currently has no CI-flagged verification gates of any kind; every check listed above was discovered as a shippable repository check (package.json scripts, tools/*.ps1 tests), not a CI-declared gate."
+      "reason": "No workflow file under .github/workflows/ (deploy-pages.yml, pages.yml) contains a `# verification: true` comment, and no verify.yml workflow exists in this repository. Discovery per .claude/commands/verify.md found zero CI-flagged gates to run; .claude/gates.json was updated to reflect an empty gate set."
     }
   ]
 }

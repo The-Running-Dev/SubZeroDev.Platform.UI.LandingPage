@@ -934,6 +934,45 @@ Reversibility: cheap. Both flags and their github.repository/build-URL
 interpolation were narrowly scoped to these two steps; restoring them is a
 two-line revert if `inferRepository` regresses.
 
+### 2026-08-20 — The GitHub delivery surface takes one named input per deployment-scoped flag, and `package-version` defaults to `latest`
+
+Context: the 2026-08-19 entry above stated the delivery surface's missing
+`--base-path` as a limitation and filed the fix as "a contract amendment and a
+slice", which issue #60 tracks. `/contract` is that amendment. `10-design.md`
+determines no signature for it, so both questions were put to the owner. The
+package is at `0.5.0`; `action.yml`'s `package-version` default is still `0.1.0`,
+and `.github/workflows/deploy-pages.yml` pins the action at `d2625b7`, which
+predates any input this amendment adds.
+Chosen: **C34** — one named input per deployment-scoped flag, where
+deployment-scoped is the test `20-contract.md` § _CLI_ already applies to
+`--base-path` in refusing it a field on the JSON model. Applied consistently that
+test selects three of the CLI's flags: `--base-path`, `--docs-url` and
+`--canonical-url`. And **C35** — the SHA `deploy-pages.yml` pins must declare
+every input the workflow passes, because a stale pin drops the flag rather than
+failing on it, which is **C29**'s failure arriving by a different door.
+`package-version` stays optional on the action and defaults to `latest`.
+Rejected, on the input shape: **a `base-path` input alone**, which was the
+recommendation and matches issue #60's `Done when` literally — rejected by the
+owner because `--docs-url` fails the same way and this repository's own
+`pages.yml` already passes both, so the narrow fix would leave the same class of
+silent breakage one flag away. **A free-text `args` pass-through**, the literal
+reading of the issue's plural title — rejected because it makes the surface
+unenumerable, so nothing can semver-govern or refuse it, and because it
+interpolates caller-supplied text into a composite action's `bash` step.
+Rejected, on `package-version`: **required with no default**, which was the
+recommendation and matches `deploy-pages.yml`'s existing `required: true` —
+rejected by the owner as a breaking change to a published surface to solve a
+staleness problem. **Optional with the default bumped each publish** — rejected
+because nothing enforces the bump, which is exactly how `0.1.0` survived four
+minor releases. The accepted cost of `latest` is stated in the contract rather
+than hidden: a deploy through this surface is current rather than reproducible,
+and a caller who needs reproducibility passes the version.
+Reversibility: cheap while both invariants remain _decided, not yet in the tree_
+— reversing is deleting two invariants and one section's worth of prose. It
+becomes expensive once the slice lands: an input published on a composite action
+is a surface consumers write against, and `latest` cannot be narrowed back to a
+pinned default without breaking whoever relied on currency.
+
 ## Open
 
 Staging only. Once an item becomes a GitHub issue, `/track` removes it from here.
