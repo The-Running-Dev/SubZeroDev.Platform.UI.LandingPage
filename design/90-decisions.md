@@ -904,6 +904,36 @@ means something different (a Docusaurus project, not two loose reference
 files) — reverting that shape change means moving files back and fixing the
 one relative link in `README.md` that changed with them.
 
+### 2026-08-20 — `pages.yml`'s repository-inference workarounds removed; `inferRepository` cleared
+
+Context: issue #61 tasked testing the two untested candidates the 2026-08-19
+entry above left open. `repositoryFromRemote`'s regex, tested against the
+exact URL form `actions/checkout@v7` produces for HTTPS (confirmed by reading
+`getFetchUrl` in that action's published `dist/index.js`:
+`${serviceUrl.origin}/${encodedOwner}/${encodedName}`, no `.git` suffix,
+`encodeURIComponent` leaves dots unescaped) — `https://github.com/The-Running-Dev/SubZeroDev.Platform.UI.LandingPage`
+— matches and returns the correct `owner/name`. The published
+`subzerodev-platform-ui-landing-page@0.5.0` tarball's `dist/git.js` is
+byte-identical to this tree's compiled `src/git.ts`. Both candidates
+`inferRepository` depends on are now verified, not merely argued from the
+regex in isolation.
+Chosen: remove `--repository` from the `generate-changelog` step and
+`--repository-url` from the `build` step in `.github/workflows/pages.yml`,
+and their explanatory comments — both steps now fall back to `inferRepository`,
+which is confirmed correct for this repository's actual CI-checked-out remote.
+Rejected: **leaving the flags in place as harmless redundancy** — the 2026-08-19
+entry was explicit that an uncorrected comment citing a cleared cause is how a
+workaround outlives its reason; with the cause now verified absent, the flags
+are dead weight the next reader would have to re-diagnose. **Reproducing the
+original CI failure directly** by dispatching `pages.yml` — rejected because
+any dispatch of this workflow performs a real Pages deployment, which is the
+same "runs the experiment in production" objection the prior entry raised
+against deleting the flags; reading `actions/checkout`'s own source for its
+exact fetch-URL construction gave an equally conclusive answer without it.
+Reversibility: cheap. Both flags and their github.repository/build-URL
+interpolation were narrowly scoped to these two steps; restoring them is a
+two-line revert if `inferRepository` regresses.
+
 ## Open
 
 Staging only. Once an item becomes a GitHub issue, `/track` removes it from here.
