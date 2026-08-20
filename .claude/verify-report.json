@@ -12,7 +12,7 @@
     {
       "name": "lint (eslint .)",
       "status": "Failed",
-      "detail": "722 problems (722 errors, 0 warnings) across 8 files, every one under spikes/composable-gadgets/dist/**, e.g. spikes/composable-gadgets/dist/shared/rolldown-runtime.js 1:334 error Expected an assignment or function call and instead saw an expression @typescript-eslint/no-unused-expressions. Machine-checked via `eslint . -f json`: files with problems 8, files outside spikes/ 0. spikes/ is gitignored and has zero tracked files on this branch; the directory is leftover on-disk build output from the #69 spike session. Tail of run:   1:334  error  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions\n\n\u2716 722 problems (722 errors, 0 warnings)"
+      "detail": "722 problems (722 errors, 0 warnings) across 8 files, every one under spikes/composable-gadgets/dist/**, e.g. spikes/composable-gadgets/dist/shared/rolldown-runtime.js 1:334 error Expected an assignment or function call and instead saw an expression @typescript-eslint/no-unused-expressions. Machine-checked via `eslint . -f json`: 8 files with problems, 0 outside spikes/. Cause: those files are bundled output from the #69 spike, ignored by git via .gitignore:2 `dist/`, which is why `git checkout` left them on disk when the tracked spike sources (spikes/**/src/) were removed by the branch switch. ESLint's flat config never reads .gitignore and ignores only docs/build/, docs/.docusaurus/ and .claude/ \u2014 so it lints them anyway. Nothing in this PR's diff is implicated; a clean checkout has no such directory."
     },
     {
       "name": "typecheck (tsc --noEmit)",
