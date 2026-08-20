@@ -431,3 +431,77 @@ correct. Changing what `assertWithin` does: the contract specifies `realpath` on
 both sides before comparing, so the call sites order around it rather than
 relaxing it. Removing `isWithin` or `resolveFrom`. Extending containment to any
 path the three modules do not check today.
+
+### UI12 — Tell the published deploy where the site will live
+
+Delivers: for a consumer who deploys through the published GitHub Action or the
+reusable Pages workflow, a way to say where the site is going to live — the
+project subpath it will sit under, the address of its documentation, and its
+canonical address — so a site published under a repository subpath arrives with
+working styles and navigation instead of quietly serving broken ones. Today
+reaching any of those means abandoning the published surface and driving the
+command-line tool directly, which is what this project itself had to do.
+
+Touches: `action.yml`, `.github/workflows/deploy-pages.yml`,
+`test/delivery.test.ts` (new), `README.md`, `docs/docs/guide.md`,
+`design/20-contract.md`
+
+Depends on: none
+
+Acceptance:
+
+- UI12.1 `action.yml` declares an optional input for each of `base-path`,
+  `docs-url` and `canonical-url`, none of the three carrying a default, and
+  declares no input whose value is passed to the CLI as a free-text argument
+  string (**C34**).
+- UI12.2 Each of the three reaches the CLI only when the caller sets it: with all
+  three unset the composite step runs a command carrying none of `--base-path`,
+  `--docs-url` or `--canonical-url`; with `base-path` set to `/Repo/` and the
+  other two unset it runs a command carrying `--base-path /Repo/` and neither of
+  the others. An omitted input forwards no flag at all rather than forwarding the
+  CLI's own default explicitly.
+- UI12.3 No caller-supplied input value is interpolated into the composite step's
+  `run:` text. Every input the step consumes — `command`, `package-version` and
+  `docs-output` included — reaches it through the step's `env:` and is referenced
+  as a quoted shell variable, so an input whose value is `; touch pwned` is
+  passed to the CLI as a single argument and starts no second command.
+- UI12.4 `action.yml`'s `package-version` is optional and defaults to `latest`,
+  and `deploy-pages.yml`'s own `package-version` remains required with no
+  default.
+- UI12.5 `.github/workflows/deploy-pages.yml` declares optional string inputs
+  `base-path`, `docs-url` and `canonical-url` and passes each to the action step
+  that runs `build`. Its `merge` step receives none of the three: `merge` copies
+  an already-built tree, so no deployment prefix applies to it.
+- UI12.6 Every input `deploy-pages.yml` passes to the composite action is
+  declared by the `action.yml` at the SHA the workflow pins, checked by reading
+  that commit's `action.yml` rather than the working tree's (**C35**).
+- UI12.7 A caller's existing workflow that sets only `command` and
+  `package-version` invokes the CLI with the same arguments, in the same order,
+  as it does before this slice — adopting the new action needs no change to it.
+- UI12.8 `README.md` and `docs/docs/guide.md` no longer state that the composite
+  action and the reusable workflow cannot carry `--base-path`, and instead name
+  the three inputs that carry it.
+- UI12.9 `README.md` and `docs/docs/guide.md` no longer state that `--base-path`
+  reaches only the legacy README/CHANGELOG generic form. Both generic forms are
+  prefixed today (**C29**), so that sentence — and the guide's paragraph calling
+  it a trap — describes a gap that has already closed.
+
+The pin takes two commits on the branch, in order: one adding the inputs to
+`action.yml`, then one repointing `deploy-pages.yml` at that first commit, which
+cannot name a SHA that does not yet exist. The pull request is merged with a
+merge commit rather than squashed, so the pinned commit stays reachable from the
+default branch; a squash would orphan it and break the pin the moment the branch
+is deleted.
+
+Out of scope: routing this repository's own `.github/workflows/pages.yml` back
+through the composite action. It installs the package globally and calls the CLI
+directly for a stated reason (`90-decisions.md`, 2026-08-19, on the `npm exec`
+resolution collision), and putting it back on the surface is a separate decision
+with its own risk. Adding an input for any content-scoped, input-resolution or
+filesystem flag — **C34** names exactly three, and a fourth is a contract
+amendment. Adding a YAML parser to check these criteria: `js-yaml` is present
+transitively but undeclared, so depending on it is green locally and absent from
+a clean install — if the criteria cannot be checked without a parser, stop and
+ask rather than adding one. Publishing an npm version or bumping
+`package.json`. Changing `--base-path`'s normalisation, or which forms it
+reaches.
