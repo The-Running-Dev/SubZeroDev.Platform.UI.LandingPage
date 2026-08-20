@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gadget spike — host</title>
+    <!--
+      The import map is the whole shared-dependency mechanism. Host bundle and
+      remote gadget bundle both leave `react` bare; both land here.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "/shared/react.js",
+          "react/jsx-runtime": "/shared/jsx-runtime.js",
+          "react-dom/client": "/shared/react-dom-client.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/host/dashboard.tsx"></script>
+  </body>
+</html>
