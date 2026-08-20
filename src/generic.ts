@@ -272,6 +272,7 @@ export async function buildGenericData(
   root: string,
   outDir: string,
   data: GenericLandingPageData,
+  basePath?: string,
 ): Promise<void> {
   await mkdir(outDir, { recursive: true });
   const home = await readMarkdown(data.home, root, outDir);
@@ -302,6 +303,7 @@ export async function buildGenericData(
       (inferred ? `https://github.com/${inferred}` : undefined),
     canonicalUrl: data.canonicalUrl,
     docsUrl: data.docsUrl,
+    basePath,
   };
   const supplemental = data.supplemental
     ? await readMarkdown(data.supplemental, root, outDir)

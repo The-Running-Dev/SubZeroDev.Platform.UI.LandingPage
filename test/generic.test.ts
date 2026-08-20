@@ -239,6 +239,30 @@ describe("generic build", () => {
     expect(home).toContain('<a class="szd-brand" href="/">');
   });
 
+  it("prefixes JSON-generic self-links with basePath, for subpath deploys", async () => {
+    const root = await mkdtemp(join(tmpdir(), "szd-generic-json-base-"));
+    roots.push(root);
+    const outDir = join(root, "site", "dist");
+    await buildGenericData(
+      root,
+      outDir,
+      {
+        version: 1,
+        kind: "generic",
+        home: { markdown: "# JSON home\n\nA description paragraph." },
+        changelog: { markdown: "# Changelog\n\n- one" },
+      },
+      "SubZeroDev.Platform.UI.LandingPage",
+    );
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    expect(home).toContain(
+      '<link rel="stylesheet" href="/SubZeroDev.Platform.UI.LandingPage/assets/szd-base.css">',
+    );
+    expect(home).toContain(
+      '<a class="szd-brand" href="/SubZeroDev.Platform.UI.LandingPage/">',
+    );
+  });
+
   it("rejects README files without exactly one level-one heading", async () => {
     const root = await fixture();
     await writeFile(

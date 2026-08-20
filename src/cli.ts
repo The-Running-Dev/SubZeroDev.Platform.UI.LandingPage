@@ -211,7 +211,8 @@ async function buildJsonData(
   sourceMapPath: string,
 ): Promise<void> {
   const { data, runtimeMap } = await resolveJsonSite(sourceMapPath);
-  if (data.kind === "generic") await buildGenericData(root, outDir, data);
+  if (data.kind === "generic")
+    await buildGenericData(root, outDir, data, options.basePath);
   else
     await buildAdapterConfig(
       root,
@@ -574,7 +575,7 @@ async function main(): Promise<void> {
       const { data, runtimeMap } = await resolveJsonSite(mode.sourceMapPath);
       if (data.kind === "generic") {
         await serveGeneric(options.outDir, () =>
-          buildGenericData(root, options.outDir, data),
+          buildGenericData(root, options.outDir, data, options.basePath),
         );
         return;
       }
