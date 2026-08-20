@@ -1,0 +1,8 @@
+# The spike *workspace* is an isolated investigation area with its own package.json and
+# toolchain (spikes/composable-gadgets/README.md), and part of it is generated
+# by a script whose output prettier would reformat on write and then fail on
+# the next regeneration. Its sources are never published as part of this
+# package. Excluded here for the same reason eslint.config.js and
+# vitest.config.ts exclude it. The spike *record* beside it is ordinary
+# Markdown and stays checked.
+spikes/composable-gadgets/

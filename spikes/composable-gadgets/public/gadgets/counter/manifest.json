@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "counter",
+  "version": "0.1.0",
+  "displayName": "Counter",
+  "entry": "/gadgets/counter/gadget.js",
+  "styles": ["/gadgets/counter/gadget.css"],
+  "contractVersion": 1,
+  "capabilities": ["standalone", "embedded", "theming", "slots"]
+}
