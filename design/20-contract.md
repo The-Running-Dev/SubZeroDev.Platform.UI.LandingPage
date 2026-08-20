@@ -279,18 +279,8 @@ default explicitly. The two are indistinguishable today and stop being so the
 moment a default moves, and this surface must not become a second place a
 default is written down (`AGENTS.md`, _Single ownership_).
 
-Until **C34** is in the tree, a generic site of either form deployed through this
-surface onto a GitHub Pages project subpath emits root-absolute self-links and
-stylesheet hrefs, and so serves unstyled with broken navigation. **C29** holds on
-both generic forms; what is missing here is not the prefixing but any route by
-which a caller could ask for it. Reaching the flag means bypassing this surface
-and invoking the CLI directly, which is what this repository's own deployment
-does (`90-decisions.md`, 2026-08-18) — and why the surface goes unexercised, and
-why the gap survived unrecorded (`90-decisions.md`, 2026-08-19).
-
 `action.yml`'s `package-version` stays optional, and its default names `latest`
-rather than a released version — _decided, not yet in the tree: the default is
-still the pinned `0.1.0`._ A pinned default is a value with nothing to keep it
+rather than a released version. A pinned default is a value with nothing to keep it
 current: this one reached four minor releases out of date without anything
 noticing, which is the argument for removing it rather than relocating it. The
 cost is stated rather than hidden — two runs of the same caller workflow may
@@ -582,19 +572,16 @@ document. Only the code-enforced ones may be trusted without checking.
   `--canonical-url` — and forwards no content-scoped flag, no input-resolution
   flag, and no free-text argument string. An input the caller omits forwards no
   flag. _[`action.yml`](../action.yml),
-  [`.github/workflows/deploy-pages.yml`](../.github/workflows/deploy-pages.yml);
-  decided, not yet in the tree — today the action forwards `--docs-output` and
-  nothing else and the workflow forwards no flag at all, so no deployment-scoped
-  flag reaches a build run this way._ Enumerated rather than passed through
+  [`.github/workflows/deploy-pages.yml`](../.github/workflows/deploy-pages.yml)._
+  Enumerated rather than passed through
   because an input that can be listed can be governed by semver and refused when
   wrong, while an argument string can only be interpolated into a shell step.
   Closing this is what makes **C29** reachable through the published surface at
   all; the prefixing it names already holds everywhere the flag arrives.
 - **C35** Every input `deploy-pages.yml` passes to the composite action is
   declared by [`action.yml`](../action.yml) at the SHA the workflow pins it at.
-  _[`.github/workflows/deploy-pages.yml`](../.github/workflows/deploy-pages.yml);
-  decided, not yet in the tree — the current pin predates the inputs **C34**
-  adds._ A pin that predates an input the workflow passes cannot honour it.
+  _[`.github/workflows/deploy-pages.yml`](../.github/workflows/deploy-pages.yml)._
+  A pin that predates an input the workflow passes cannot honour it.
   Whether the runner refuses the step or merely warns and drops the input decides
   only whether that failure is loud or silent, and the silent branch is the one
   this contract cannot accept: the site deploys with the flag absent, which is
