@@ -1,24 +1,48 @@
 {
+  "generated": "2026-08-20",
+  "branch": "contract/package-version-marker",
+  "flaggedCiGates": 0,
+  "note": "No .github/workflows step carries '# verification: true'; the discovered flagged-gate set is empty. Every gate below is an ungated repository check run from package.json, named because it was run.",
   "gates": [
     {
-      "name": "npm run check",
+      "name": "format:check (prettier --check .)",
       "status": "Passed",
-      "detail": "format:check, lint, typecheck, build, test, pack:check all succeeded. Test Files 10 passed (10); Tests 112 passed (112). npm pack --dry-run produced subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, 40.1 kB packed / 138.1 kB unpacked."
+      "detail": "All matched files use Prettier code style."
     },
     {
-      "name": "Pester tests (tools)",
+      "name": "lint (eslint .)",
+      "status": "Failed",
+      "detail": "722 problems (722 errors, 0 warnings) across 8 files, every one under spikes/composable-gadgets/dist/**, e.g. spikes/composable-gadgets/dist/shared/rolldown-runtime.js 1:334 error Expected an assignment or function call and instead saw an expression @typescript-eslint/no-unused-expressions. Machine-checked via `eslint . -f json`: files with problems 8, files outside spikes/ 0. spikes/ is gitignored and has zero tracked files on this branch; the directory is leftover on-disk build output from the #69 spike session. Tail of run:   1:334  error  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions\n\n\u2716 722 problems (722 errors, 0 warnings)"
+    },
+    {
+      "name": "typecheck (tsc --noEmit)",
       "status": "Passed",
-      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru: Tests Passed: 113, Failed: 0, Skipped: 0, Inconclusive: 0, NotRun: 0. Result: Passed across Invoke-DoneHousekeeping.Tests.ps1, Measure-Session.Tests.ps1, Sync-Kit.Tests.ps1, Test-Companion.Tests.ps1, Test-DesignDrift.Tests.ps1, Test-GatesCache.Tests.ps1, Test-VerifyReport.Tests.ps1, Test-WriteSurface.Tests.ps1, Wait-PullRequestCheck.Tests.ps1."
+      "detail": "No type errors."
+    },
+    {
+      "name": "build (tsc -p tsconfig.json + chmod dist/cli.js)",
+      "status": "Passed",
+      "detail": "Compiled to dist/ and set the CLI executable bit."
+    },
+    {
+      "name": "test (vitest run)",
+      "status": "Passed",
+      "detail": "Test Files 10 passed (10); Tests 112 passed (112)."
+    },
+    {
+      "name": "pack:check (npm pack --dry-run)",
+      "status": "Passed",
+      "detail": "Tarball contents enumerated without error."
     },
     {
       "name": "git diff --check",
       "status": "Passed",
-      "detail": "No whitespace errors reported; exit code 0."
+      "detail": "No whitespace errors or conflict markers."
     },
     {
-      "name": "CI-flagged gates (# verification: true)",
+      "name": "CI checks on PR #71",
       "status": "DidNotRun",
-      "reason": "No workflow file under .github/workflows/ (deploy-pages.yml, pages.yml) contains a `# verification: true` comment, and no verify.yml workflow exists in this repository. Discovery per .claude/commands/verify.md found zero CI-flagged gates to run; .claude/gates.json was updated to reflect an empty gate set."
+      "reason": "No CI runs on this pull request. The repository ships two workflows: pages.yml triggers only on push to main and workflow_dispatch, and deploy-pages.yml is workflow_call-only. `gh pr checks 71` reports no checks on the branch, so no gate answer will arrive from CI."
     }
   ]
 }
