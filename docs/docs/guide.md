@@ -542,14 +542,13 @@ site deployed under a project subpath still addresses its own documents. It
 does not reach the custom-adapter forms, whose entry paths are already
 `/`-relative to the site root Vite is given — it is a deployment concern, not
 a content one, which is why it is a flag rather than a field on the JSON
-model.
+model. It reaches both the legacy README/CHANGELOG generic form and a JSON
+`kind: "generic"` model.
 
-Today it reaches only the legacy README/CHANGELOG generic form. A JSON
-`kind: "generic"` model does not receive it yet, so a JSON-backed generic
-site deployed under a project subpath emits root-absolute links regardless of
-the flag. This is a known, decided gap rather than an oversight — treat it as
-a trap if you move a legacy generic site to JSON-backed data while deployed
-under a subpath.
+The composite action and the reusable `workflow_call` carry `base-path` too,
+as a named input, alongside `docs-url` and `canonical-url` for the site's
+documentation and canonical addresses. Each reaches the CLI only when the
+caller sets it.
 
 ### Generating a changelog
 

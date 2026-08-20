@@ -11,7 +11,16 @@ inputs:
   package-version:
     description: Exact npm package version
     required: false
-    default: 0.1.0
+    default: latest
+  base-path:
+    description: Path prefix for a site deployed under a GitHub Pages project subpath
+    required: false
+  docs-url:
+    description: Address of the site's documentation
+    required: false
+  canonical-url:
+    description: The site's canonical address
+    required: false
 runs:
   using: composite
   steps:
@@ -19,4 +28,17 @@ runs:
       with:
         node-version: 22
     - shell: bash
-      run: npx --yes subzerodev-platform-ui-landing-page@${{ inputs.package-version }} ${{ inputs.command }} ${{ inputs.docs-output && format('--docs-output {0}', inputs.docs-output) || '' }}
+      env:
+        COMMAND: ${{ inputs.command }}
+        PACKAGE_VERSION: ${{ inputs.package-version }}
+        DOCS_OUTPUT: ${{ inputs.docs-output }}
+        BASE_PATH: ${{ inputs.base-path }}
+        DOCS_URL: ${{ inputs.docs-url }}
+        CANONICAL_URL: ${{ inputs.canonical-url }}
+      run: |
+        args=("$COMMAND")
+        if [ -n "$DOCS_OUTPUT" ]; then args+=(--docs-output "$DOCS_OUTPUT"); fi
+        if [ -n "$BASE_PATH" ]; then args+=(--base-path "$BASE_PATH"); fi
+        if [ -n "$DOCS_URL" ]; then args+=(--docs-url "$DOCS_URL"); fi
+        if [ -n "$CANONICAL_URL" ]; then args+=(--canonical-url "$CANONICAL_URL"); fi
+        npx --yes "subzerodev-platform-ui-landing-page@$PACKAGE_VERSION" "${args[@]}"

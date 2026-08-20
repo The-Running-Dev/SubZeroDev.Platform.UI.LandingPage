@@ -46,11 +46,10 @@ optional `site/theme.css`, and optional `site/public/`. The build writes
   protected path.
 
 `--base-path` (default `/`) prefixes the generic shell's self-links and
-stylesheet hrefs, for a site deployed under a project subpath. It reaches only
-the legacy README/CHANGELOG generic form today — a JSON `kind: "generic"` model
-does not receive it yet, so a JSON-backed generic site under a subpath emits
-root-absolute links regardless of the flag. It is not carried by the composite
-action or the reusable workflow, so a site deployed through those cannot set it.
+stylesheet hrefs, for a site deployed under a project subpath. The composite
+action and the reusable workflow carry it too, as the `base-path` input,
+alongside `docs-url` and `canonical-url` for the site's documentation and
+canonical addresses.
 
 ## JSON site data
 

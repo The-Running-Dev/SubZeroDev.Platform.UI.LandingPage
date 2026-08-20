@@ -1,48 +1,44 @@
 {
-  "generated": "2026-08-20",
-  "branch": "contract/package-version-marker",
-  "flaggedCiGates": 0,
-  "note": "No .github/workflows step carries '# verification: true'; the discovered flagged-gate set is empty. Every gate below is an ungated repository check run from package.json, named because it was run.",
   "gates": [
     {
-      "name": "format:check (prettier --check .)",
+      "name": "format:check",
       "status": "Passed",
-      "detail": "All matched files use Prettier code style."
+      "detail": "prettier --check . — All matched files use Prettier code style!"
     },
     {
-      "name": "lint (eslint .)",
+      "name": "lint",
       "status": "Failed",
-      "detail": "722 problems (722 errors, 0 warnings) across 8 files, every one under spikes/composable-gadgets/dist/**, e.g. spikes/composable-gadgets/dist/shared/rolldown-runtime.js 1:334 error Expected an assignment or function call and instead saw an expression @typescript-eslint/no-unused-expressions. Machine-checked via `eslint . -f json`: 8 files with problems, 0 outside spikes/. Cause: those files are bundled output from the #69 spike, ignored by git via .gitignore:2 `dist/`, which is why `git checkout` left them on disk when the tracked spike sources (spikes/**/src/) were removed by the branch switch. ESLint's flat config never reads .gitignore and ignores only docs/build/, docs/.docusaurus/ and .claude/ \u2014 so it lints them anyway. Nothing in this PR's diff is implicated; a clean checkout has no such directory."
+      "detail": "eslint . — 722 problems (722 errors, 0 warnings), all inside spikes/composable-gadgets/dist/**/*.js (generated bundles). Identical count (722) on this branch's base commit before this PR's changes — confirmed with git stash. Pre-existing, tracked as issue #72 (npm run lint fails on generated bundles: eslint.config.js names no dist/ ignore). No error under src/, test/, action.yml, or the workflows this PR touches."
     },
     {
-      "name": "typecheck (tsc --noEmit)",
+      "name": "typecheck",
       "status": "Passed",
-      "detail": "No type errors."
+      "detail": "tsc --noEmit — no output, no errors."
     },
     {
-      "name": "build (tsc -p tsconfig.json + chmod dist/cli.js)",
+      "name": "build",
       "status": "Passed",
-      "detail": "Compiled to dist/ and set the CLI executable bit."
+      "detail": "tsc -p tsconfig.json && chmod dist/cli.js 0o755 — no output, no errors."
     },
     {
-      "name": "test (vitest run)",
+      "name": "test",
       "status": "Passed",
-      "detail": "Test Files 10 passed (10); Tests 112 passed (112)."
+      "detail": "vitest run — Test Files 11 passed (11), Tests 125 passed (125), including the 13 new tests in test/delivery.test.ts covering action.yml and deploy-pages.yml."
     },
     {
-      "name": "pack:check (npm pack --dry-run)",
+      "name": "pack:check",
       "status": "Passed",
-      "detail": "Tarball contents enumerated without error."
+      "detail": "npm pack --dry-run — packed subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, 40.3 kB package size, no errors."
     },
     {
       "name": "git diff --check",
       "status": "Passed",
-      "detail": "No whitespace errors or conflict markers."
+      "detail": "git diff --check — exit 0, no whitespace errors."
     },
     {
-      "name": "CI checks on PR #71",
-      "status": "DidNotRun",
-      "reason": "No CI runs on this pull request. The repository ships two workflows: pages.yml triggers only on push to main and workflow_dispatch, and deploy-pages.yml is workflow_call-only. `gh pr checks 71` reports no checks on the branch, so no gate answer will arrive from CI."
+      "name": "tools/*.Tests.ps1",
+      "status": "Passed",
+      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru — Tests Passed: 113, Failed: 0, Skipped: 0, NotRun: 0, Duration 00:00:48.75."
     }
   ]
 }
