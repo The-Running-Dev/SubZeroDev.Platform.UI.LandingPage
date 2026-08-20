@@ -23,27 +23,37 @@
     {
       "name": "npm test (vitest run)",
       "status": "Passed",
-      "detail": "Test Files 10 passed (10); Tests 112 passed (112); Duration 45.78s (most recent of 4 runs this session). Flaky: one of the 4 full-suite runs (via `npm run check`) failed with `Error: ENOTEMPTY: directory not empty, rmdir '.../szd-json-source-.../site/.vite'` in test/json-source.test.ts > 'serves a plain adapter's routes through the dev server via the CLI's mode ladder when no source map is present (UI10.5)' — a temp-directory cleanup race unrelated to this PR's files (src/generic.ts, src/cli.ts, test/generic.test.ts). Re-run in isolation and in two other full-suite runs passed cleanly (3 passed / 1 failed across 4 runs)."
+      "detail": "Test Files 10 passed (10); Tests 112 passed (112); Duration 39.79s (transform 1.29s, setup 0ms, import 3.27s, tests 83.82s)."
     },
     {
       "name": "npm run pack:check (npm pack --dry-run)",
       "status": "Passed",
-      "detail": "npm pack --dry-run built the tarball successfully: subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, package size 40.1 kB."
+      "detail": "npm pack --dry-run built the tarball successfully: subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, package size 40.1 kB, unpacked 138.1 kB."
+    },
+    {
+      "name": "Design drift check (tools/Test-DesignDrift.ps1 -SlicePrefix UI)",
+      "status": "Passed",
+      "detail": "Slices compared: 8\nFindings: 0    Could not evaluate: 0\nNo drift."
     },
     {
       "name": "PowerShell parse-check (*.ps1 under tools/)",
       "status": "Passed",
-      "detail": "[System.Management.Automation.Language.Parser]::ParseFile against all 18 tools/*.ps1 files: All 18 ps1 files parsed cleanly, 0 failed."
+      "detail": "[System.Management.Automation.Language.Parser]::ParseFile against all 18 tools/*.ps1 files: Parsed 18 files; 0 failed."
     },
     {
       "name": "Pester tests (Invoke-Pester -Path tools)",
       "status": "Passed",
-      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru: PassedCount 113, FailedCount 0, FailedBlocksCount 0, FailedContainersCount 0, TotalCount 113."
+      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru: Tests Passed: 113, Failed: 0, Skipped: 0, Inconclusive: 0, NotRun: 0. PassedCount 113, FailedCount 0, FailedBlocksCount 0, FailedContainersCount 0, TotalCount 113."
     },
     {
       "name": "git diff --check",
       "status": "Passed",
       "detail": "git diff --check exited 0 with no output; no whitespace errors."
+    },
+    {
+      "name": "Docusaurus docs build (docs/, npm run build)",
+      "status": "DidNotRun",
+      "reason": "Not CI-gated (no `# verification: true` flag on any step in .github/workflows/*.yml, and no such flagged step exists for this repository at all — grep for the flag returned no matches). docs/node_modules is not installed locally. This PR touches only design/20-contract.md and design/10-design.md, neither of which docs/ builds from, so it was not run."
     }
   ]
 }
