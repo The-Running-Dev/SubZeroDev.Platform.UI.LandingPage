@@ -1,24 +1,44 @@
 {
   "gates": [
     {
-      "name": "npm run check",
+      "name": "format:check",
       "status": "Passed",
-      "detail": "format:check, lint, typecheck, build, test, pack:check all succeeded. Test Files 10 passed (10); Tests 112 passed (112). npm pack --dry-run produced subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, 40.1 kB packed / 138.1 kB unpacked."
+      "detail": "prettier --check . — All matched files use Prettier code style!"
     },
     {
-      "name": "Pester tests (tools)",
+      "name": "lint",
+      "status": "Failed",
+      "detail": "eslint . — 722 problems (722 errors, 0 warnings), all inside spikes/composable-gadgets/dist/**/*.js (generated bundles). Identical count (722) on this branch's base commit before this PR's changes — confirmed with git stash. Pre-existing, tracked as issue #72 (npm run lint fails on generated bundles: eslint.config.js names no dist/ ignore). No error under src/, test/, action.yml, or the workflows this PR touches."
+    },
+    {
+      "name": "typecheck",
       "status": "Passed",
-      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru: Tests Passed: 113, Failed: 0, Skipped: 0, Inconclusive: 0, NotRun: 0. Result: Passed across Invoke-DoneHousekeeping.Tests.ps1, Measure-Session.Tests.ps1, Sync-Kit.Tests.ps1, Test-Companion.Tests.ps1, Test-DesignDrift.Tests.ps1, Test-GatesCache.Tests.ps1, Test-VerifyReport.Tests.ps1, Test-WriteSurface.Tests.ps1, Wait-PullRequestCheck.Tests.ps1."
+      "detail": "tsc --noEmit — no output, no errors."
+    },
+    {
+      "name": "build",
+      "status": "Passed",
+      "detail": "tsc -p tsconfig.json && chmod dist/cli.js 0o755 — no output, no errors."
+    },
+    {
+      "name": "test",
+      "status": "Passed",
+      "detail": "vitest run — Test Files 11 passed (11), Tests 125 passed (125), including the 13 new tests in test/delivery.test.ts covering action.yml and deploy-pages.yml."
+    },
+    {
+      "name": "pack:check",
+      "status": "Passed",
+      "detail": "npm pack --dry-run — packed subzerodev-platform-ui-landing-page-0.5.0.tgz, 33 files, 40.3 kB package size, no errors."
     },
     {
       "name": "git diff --check",
       "status": "Passed",
-      "detail": "No whitespace errors reported; exit code 0."
+      "detail": "git diff --check — exit 0, no whitespace errors."
     },
     {
-      "name": "CI-flagged gates (# verification: true)",
-      "status": "DidNotRun",
-      "reason": "No workflow file under .github/workflows/ (deploy-pages.yml, pages.yml) contains a `# verification: true` comment, and no verify.yml workflow exists in this repository. Discovery per .claude/commands/verify.md found zero CI-flagged gates to run; .claude/gates.json was updated to reflect an empty gate set."
+      "name": "tools/*.Tests.ps1",
+      "status": "Passed",
+      "detail": "Invoke-Pester -Path tools -Output Detailed -PassThru — Tests Passed: 113, Failed: 0, Skipped: 0, NotRun: 0, Duration 00:00:48.75."
     }
   ]
 }

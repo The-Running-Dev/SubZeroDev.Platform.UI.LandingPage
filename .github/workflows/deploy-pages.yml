@@ -9,6 +9,15 @@ on:
       package-version:
         required: true
         type: string
+      base-path:
+        required: false
+        type: string
+      docs-url:
+        required: false
+        type: string
+      canonical-url:
+        required: false
+        type: string
     outputs:
       page_url:
         value: ${{ jobs.deploy.outputs.page_url }}
@@ -32,12 +41,15 @@ jobs:
         with:
           name: ${{ inputs.docs-artifact }}
           path: artifacts/docs
-      - uses: The-Running-Dev/SubZeroDev.Platform.UI.LandingPage@d2625b7be51585371d9f0b6c0b435c25e6ea4ade
+      - uses: The-Running-Dev/SubZeroDev.Platform.UI.LandingPage@bbe3c6583aeb1a5b4aebacf288d5d8a1f2c9558a
         with:
           command: build
           package-version: ${{ inputs.package-version }}
+          base-path: ${{ inputs.base-path }}
+          docs-url: ${{ inputs.docs-url }}
+          canonical-url: ${{ inputs.canonical-url }}
       - if: inputs.docs-artifact != ''
-        uses: The-Running-Dev/SubZeroDev.Platform.UI.LandingPage@d2625b7be51585371d9f0b6c0b435c25e6ea4ade
+        uses: The-Running-Dev/SubZeroDev.Platform.UI.LandingPage@bbe3c6583aeb1a5b4aebacf288d5d8a1f2c9558a
         with:
           command: merge
           docs-output: artifacts/docs
