@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "counter",
+  "version": "0.1.0",
+  "displayName": "Counter (missing entry)",
+  "entry": "/gadgets/counter/not-published.js",
+  "contractVersion": 1
+}

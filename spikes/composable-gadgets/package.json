@@ -1,0 +1,30 @@
+{
+  "name": "szd-spike-composable-gadgets",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Issue #69 spike. Not published, not part of the LandingPage package.",
+  "scripts": {
+    "build:shared": "node scripts/generate-shims.mjs && vite build --config vite.shared.config.ts",
+    "build:remote": "vite build --config vite.remote.config.ts",
+    "build:host": "vite build --config vite.host.config.ts",
+    "build": "npm run build:host && npm run build:shared && npm run build:remote",
+    "preview": "vite preview --config vite.host.config.ts --port 4319 --strictPort",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm run test && npm run build && node scripts/verify-bundles.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "jsdom": "^29.0.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10"
+  }
+}

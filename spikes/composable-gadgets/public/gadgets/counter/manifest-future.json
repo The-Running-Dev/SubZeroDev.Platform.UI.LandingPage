@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "counter",
+  "version": "9.0.0",
+  "displayName": "Counter (next contract)",
+  "entry": "/gadgets/counter/gadget.js",
+  "styles": ["/gadgets/counter/gadget.css"],
+  "contractVersion": 2,
+  "capabilities": ["standalone"]
+}

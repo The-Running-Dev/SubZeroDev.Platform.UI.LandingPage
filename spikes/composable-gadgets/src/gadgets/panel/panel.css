@@ -1,0 +1,18 @@
+@layer szd-gadget {
+  .szd-gadget-panel {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px dashed #7a8a99;
+    border-radius: 0.5rem;
+    font-family: system-ui, sans-serif;
+  }
+
+  .szd-gadget-panel__heading {
+    margin: 0;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #55606b;
+  }
+}

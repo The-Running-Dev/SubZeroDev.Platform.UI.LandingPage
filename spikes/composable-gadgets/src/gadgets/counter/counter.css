@@ -1,0 +1,48 @@
+/*
+ * Every rule the gadget owns is prefixed and every value it themes is a token.
+ * The layer is what keeps a host's own rules able to override the gadget
+ * deliberately while unrelated host rules do not win by accident.
+ */
+@layer szd-gadget {
+  .szd-gadget-counter {
+    --szd-gadget-counter-fg: #10202e;
+    --szd-gadget-counter-bg: #d8ecf7;
+    --szd-gadget-counter-accent: #1c6ea4;
+    display: grid;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    color: var(--szd-gadget-counter-fg);
+    background: var(--szd-gadget-counter-bg);
+    font-family: system-ui, sans-serif;
+  }
+
+  .szd-gadget-counter[data-theme="warm"] {
+    --szd-gadget-counter-fg: #2e1a10;
+    --szd-gadget-counter-bg: #f7e6d8;
+    --szd-gadget-counter-accent: #a4561c;
+  }
+
+  .szd-gadget-counter__heading {
+    margin: 0;
+    font-size: 1rem;
+    text-transform: none;
+  }
+
+  .szd-gadget-counter__value {
+    font-size: 1.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--szd-gadget-counter-accent);
+  }
+
+  .szd-gadget-counter__button {
+    justify-self: start;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--szd-gadget-counter-accent);
+    border-radius: 0.25rem;
+    background: transparent;
+    color: var(--szd-gadget-counter-accent);
+    text-transform: none;
+    cursor: pointer;
+  }
+}

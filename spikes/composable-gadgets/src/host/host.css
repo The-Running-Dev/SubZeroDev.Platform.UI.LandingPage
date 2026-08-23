@@ -1,0 +1,47 @@
+body {
+  margin: 0;
+  padding: 2rem;
+  font-family: system-ui, sans-serif;
+  background: #f4f6f8;
+  color: #10202e;
+}
+
+.host-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
+}
+
+.host-card {
+  background: #fff;
+  border: 1px solid #d6dee5;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.host-card > h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a6672;
+}
+
+/*
+ * The hostile rule. Unprefixed, element-selector, global — exactly the kind a
+ * real host stylesheet grows by accident. The proof measures whether it
+ * reaches inside a gadget.
+ */
+button {
+  letter-spacing: 4px;
+}
+
+#results {
+  margin-top: 2rem;
+  background: #10202e;
+  color: #d8ecf7;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
