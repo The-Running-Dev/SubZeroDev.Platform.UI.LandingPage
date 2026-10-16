@@ -5,7 +5,8 @@ title: SubZeroDev Platform UI Landing Page
 <!--
   Exists only so Docusaurus has a route at the site root — its
   onBrokenLinks/onBrokenAnchors checks are 'throw', and the navbar brand
-  links here. `.github/workflows/pages.yml`'s `merge` step overwrites this
+  links here. The Pages deploy's `merge` step, in
+  tools/Build-LandingPage.ps1, overwrites this
   page's built output with the real landing page (built from the
   repository's own README.md by the package's generic mode) on every
   deploy. Same reason and same fix as GameEngine's docs/src/pages/index.md.

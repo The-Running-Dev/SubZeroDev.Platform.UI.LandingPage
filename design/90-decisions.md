@@ -973,6 +973,30 @@ becomes expensive once the slice lands: an input published on a composite action
 is a surface consumers write against, and `latest` cannot be narrowed back to a
 pinned default without breaking whoever relied on currency.
 
+### 2026-10-16 — The self-hosted deploy runs through the shared GitHub Actions library
+
+Context: `.github/workflows/pages.yml` carried its own checkout, Node setup,
+docs build, Pages upload and deploy, the same steps every Pages site in this
+organisation repeats. The-Running-Dev/GitHub-ActionTemplates now publishes a
+reusable `pages.yml` that does them, deploys only from `main`, serialises
+deployments and skips one whose commit is no longer the branch head.
+Chosen: the workflow calls the library's `pages.yml@v0` to build `docs/`, and
+the landing-page half — the global install of the published package,
+`generate-changelog`, `build` and `merge` — moves verbatim into
+`tools/Build-LandingPage.ps1`, run as its post-build script. The package
+version moves from the workflow's `PACKAGE_VERSION` to the `env` input's
+`LANDING_PAGE_VERSION`. The base path comes from the library's
+`PAGES_BASE_PATH`, read from the Pages settings, instead of a hardcoded
+subpath. Pull requests now build the site without deploying. The 2026-08-19
+global-install decision is unchanged; only where its command lives moved.
+Rejected: **routing the deploy back through this package's own
+`deploy-pages.yml` or `action.yml`** — still out of scope per `30-slices.md`,
+for the same `npm exec` collision. **Keeping the landing-page commands inline
+in the workflow** — the library has no input for them, and logic belongs in a
+script rather than embedded in YAML.
+Reversibility: cheap. Reverting the one commit restores the hand-written
+workflow; nothing outside this repository depends on it.
+
 ## Open
 
 Staging only. Once an item becomes a GitHub issue, `/track` removes it from here.
